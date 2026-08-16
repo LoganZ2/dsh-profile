@@ -30,12 +30,3 @@
           # API-key catalog route: key comes from the stored credential
           # (`llm-pi-login deepseek --api-key`) or ambient env.
           deepseek: {}
-
-    # The loop: pi-agent-core's Agent, fed entirely from ctx.llm. Which
-    # route/model drives it is deployment config, overridable per profile.
-    - id: agent-pi
-      name: 'dsh-bundle-loganz2/agent'
-      config:
-        provider: deepseek
-        model: deepseek-v4-flash
-        systemPrompt: You are a helpful assistant.

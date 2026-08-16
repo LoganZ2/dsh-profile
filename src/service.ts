@@ -91,33 +91,6 @@ export class PiLlm extends Service {
     return this.ctx.get('attachments') as AttachmentReader | undefined
   }
 
-  /**
-   * pi-native seam for sibling plugins (the agent loop): resolve one
-   * configured route/model pair to its pi model descriptor.
-   */
-  piModel(provider: string, model: string): Model<Api> {
-    return this.model(provider, model)
-  }
-
-  /**
-   * pi-native stream function for sibling plugins. Route facts this layer
-   * owns — the transport toggle today — are folded in here, so a consumer
-   * handing this to pi-agent-core inherits them without knowing routes exist.
-   */
-  streamFn(): (
-    model: Model<Api>,
-    context: Parameters<MutableModels['streamSimple']>[1],
-    options?: Parameters<MutableModels['streamSimple']>[2],
-  ) => ReturnType<MutableModels['streamSimple']> {
-    return (model, context, options) => {
-      const transport = this.routes.get(model.provider)?.transport
-      return this.models.streamSimple(model, context, {
-        ...options,
-        ...transport === undefined || options?.transport !== undefined ? {} : { transport },
-      })
-    }
-  }
-
   private route(provider: string): RouteConfig {
     const route = this.routes.get(provider)
     if (route === undefined) throw new Error(`llm-pi: no configured provider route "${provider}"`)
