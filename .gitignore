@@ -1,0 +1,27 @@
+# --- secrets and machine-local state -------------------------------------
+# `home/` is a DSH_HOME. dsh writes credentials, settings, and full session
+# transcripts into it at runtime. Only the profile SOURCE is tracked; every
+# other path under home/ is ignored so nothing sensitive can be committed.
+home/.credentials.yaml
+home/.env
+home/settings.yaml
+home/sessions/
+home/attachments/
+home/storages/
+home/cordis.patch.yml
+
+# Auto-healed symlink pool (254 links into the dsh installation) and the
+# auto-generated profile root. dsh recreates both on next run.
+home/profiles/node_modules/
+home/profiles/*/cordis.yml
+home/profiles/*/node_modules/
+home/profiles/*/pnpm-lock.yaml
+
+# --- build output ---------------------------------------------------------
+node_modules/
+plugins/*/lib/
+plugins/*/node_modules/
+*.tsbuildinfo
+
+# --- os -------------------------------------------------------------------
+.DS_Store
