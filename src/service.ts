@@ -39,14 +39,11 @@ import type {
 } from './vocab.ts'
 import { callConfigEquals } from './vocab.ts'
 
-declare module '@deepseek-ai/cordis' {
-  interface Context {
-    llm: PiLlm
-  }
-  interface Events {
-    'llm/stream'(options: GenerateOptions, next: () => AsyncIterable<StreamChunk>): AsyncIterable<StreamChunk>
-  }
-}
+// No module augmentation here: `@deepseek-ai/dsh-llm`'s type declarations
+// (pulled transitively by dsh-tools) already declare `Context.llm` and the
+// `'llm/stream'` waterfall for the same seam this service claims. At runtime
+// ours is the only implementation mounted; at compile time we cast at the
+// one waterfall call site instead of fighting the merged declarations.
 
 /**
  * Retry is not this layer's business yet (the stock retry row is disabled in
@@ -200,7 +197,11 @@ export class PiLlm extends Service {
 
   /** Stream one model call as harness chunks, wrapped in the `llm/stream` waterfall. */
   stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
-    return this.ctx.waterfall('llm/stream', options, () => this.wireStream(options))
+    return this.ctx.waterfall(
+      'llm/stream',
+      options as never,
+      (() => this.wireStream(options)) as never,
+    ) as AsyncIterable<StreamChunk>
   }
 
   /**

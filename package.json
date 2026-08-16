@@ -10,6 +10,18 @@
       "types": "./lib/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./permission": {
+      "types": "./lib/permission/index.d.ts",
+      "default": "./lib/permission/index.js"
+    },
+    "./tool-fs": {
+      "types": "./lib/toolfs/index.d.ts",
+      "default": "./lib/toolfs/index.js"
+    },
+    "./tool-bash": {
+      "types": "./lib/toolbash/index.d.ts",
+      "default": "./lib/toolbash/index.js"
+    },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
@@ -30,13 +42,18 @@
     "prepare": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@earendil-works/pi-ai": "^0.82.1"
+    "@earendil-works/pi-ai": "^0.82.1",
+    "diff": "^8.0.2",
+    "tree-sitter-bash": "^0.25.0",
+    "web-tree-sitter": "^0.25.10"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "*"
+    "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/dsh-tools": "*"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-tools": "^0.1.0-rc.5",
     "typescript": "^5.9.2"
   },
   "license": "MIT"
