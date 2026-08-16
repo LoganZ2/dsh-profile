@@ -1,0 +1,9 @@
+# dsh-bundle-loganz2 — this bundle's patch layer.
+#
+# Applied over whatever the layers below it composed. Installing this package
+# into a profile appends it to that profile's `bundles` list, so these rows
+# join the tree and stay patchable by the profile's own cordis.patch.yml.
+
+- insert:
+    - id: shout
+      name: 'dsh-bundle-loganz2'

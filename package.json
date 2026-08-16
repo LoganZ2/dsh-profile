@@ -1,8 +1,7 @@
 {
-  "name": "dsh-plugin-shout",
+  "name": "dsh-bundle-loganz2",
   "version": "0.1.0",
-  "description": "A first DeepSeek Harness plugin: registers a shout tool and a ctx.shout service.",
-  "private": true,
+  "description": "A DeepSeek Harness bundle: adds a shout tool and a ctx.shout service to any profile.",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -11,14 +10,21 @@
       "types": "./lib/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
   "files": [
-    "lib"
+    "lib",
+    "cordis.patch.yml"
   ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "watch": "tsc -p tsconfig.json --watch"
+    "prepare": "tsc -p tsconfig.json"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "*",
@@ -28,5 +34,6 @@
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-tools": "^0.1.0-rc.5",
     "typescript": "^5.9.2"
-  }
+  },
+  "license": "MIT"
 }
