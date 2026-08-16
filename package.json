@@ -10,6 +10,10 @@
       "types": "./lib/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./anchored": {
+      "types": "./lib/anchored/index.d.ts",
+      "default": "./lib/anchored/index.js"
+    },
     "./permission": {
       "types": "./lib/permission/index.d.ts",
       "default": "./lib/permission/index.js"
