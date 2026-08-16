@@ -22,11 +22,11 @@
       name: 'dsh-bundle-loganz2'
       config:
         providers:
-          # OAuth route: `dsh-llm-pi-login openai-codex` once, then requests
+          # OAuth route: `llm-pi-login openai-codex` once, then requests
           # authenticate and refresh on their own. The transport variable is
           # the WebSocket toggle; codex's wire honors it (SSE fallback).
           openai-codex:
             transport: websocket
           # API-key catalog route: key comes from the stored credential
-          # (`dsh-llm-pi-login deepseek --api-key`) or ambient env.
+          # (`llm-pi-login deepseek --api-key`) or ambient env.
           deepseek: {}

@@ -7,10 +7,10 @@
  * OAuth flows print their authorization URL (and try to open the browser);
  * api_key flows prompt for the key and store it.
  *
- *   dsh-llm-pi-login <provider>            # OAuth when the provider has it
- *   dsh-llm-pi-login <provider> --api-key  # force api_key storage
- *   dsh-llm-pi-login <provider> --logout
- *   dsh-llm-pi-login --list
+ *   llm-pi-login <provider>            # OAuth when the provider has it
+ *   llm-pi-login <provider> --api-key  # force api_key storage
+ *   llm-pi-login <provider> --logout
+ *   llm-pi-login --list
  *
  * Uses `$DSH_HOME` (falling back to `~/.dsh`) exactly like the harness, so
  * point it at the same home the profile runs with.
@@ -46,7 +46,7 @@ async function main(): Promise<number> {
   }
 
   if (provider === undefined) {
-    console.error('usage: dsh-llm-pi-login <provider> [--api-key | --logout] | --list')
+    console.error('usage: llm-pi-login <provider> [--api-key | --logout] | --list')
     console.error('providers with OAuth: '
       + builtinProviders().filter(p => p.auth.oauth !== undefined).map(p => p.id).join(', '))
     return 2

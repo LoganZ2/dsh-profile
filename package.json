@@ -14,7 +14,7 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "dsh-llm-pi-login": "./lib/login.js"
+    "llm-pi-login": "./lib/login.js"
   },
   "files": [
     "lib",
