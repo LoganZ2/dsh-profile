@@ -1,0 +1,437 @@
+/**
+ * Bench instrument, daylight. An anodized sand faceplate with silkscreen
+ * labels, and one continuous wire down the left gutter: it pulses while the
+ * model streams and breaks into an open circuit while a gate waits on you.
+ */
+
+:root {
+  --panel: #dad6cb;
+  --plate: #efede6;
+  --ink: #15181a;
+  --ink-dim: #6b6e67;
+  --signal: #1d6b4f;
+  --gate: #9a4b12;
+
+  --rule: rgba(21, 24, 26, 0.14);
+  --rule-firm: rgba(21, 24, 26, 0.3);
+  --shade: rgba(21, 24, 26, 0.05);
+
+  --display: "Futura", "Futura PT", "Century Gothic", "Avenir Next", sans-serif;
+  --body: "Seravek", "Optima", "Avenir Next", -apple-system, sans-serif;
+  --mono: "SF Mono", "Menlo", ui-monospace, monospace;
+
+  --rail: 46px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --panel: #1a1c1b;
+    --plate: #242724;
+    --ink: #e7e5dc;
+    --ink-dim: #8b8f86;
+    --signal: #56c08c;
+    --gate: #dd9245;
+
+    --rule: rgba(231, 229, 220, 0.16);
+    --rule-firm: rgba(231, 229, 220, 0.34);
+    --shade: rgba(0, 0, 0, 0.22);
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  height: 100vh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: var(--panel);
+  color: var(--ink);
+  font: 15px/1.62 var(--body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- faceplate ------------------------------------------------------ */
+
+.faceplate {
+  -webkit-app-region: drag;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 18px 0 84px;
+  height: 52px;
+  border-bottom: 1px solid var(--rule-firm);
+  background: linear-gradient(var(--shade), transparent);
+}
+
+.mark {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: 600 15px/1 var(--display);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.mark__bar {
+  width: 3px;
+  height: 14px;
+  background: var(--signal);
+}
+
+.plates {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.plate {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 3px 9px;
+  min-width: 0;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--plate);
+}
+
+.plate__label {
+  font: 10px/1 var(--display);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  white-space: nowrap;
+}
+
+.plate__value {
+  font: 11px/1.3 var(--mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lamp {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.lamp__bulb {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ink-dim);
+  box-shadow: 0 0 0 3px transparent;
+}
+
+.lamp__text {
+  font: 10px/1 var(--display);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.lamp[data-state="ready"] .lamp__bulb,
+.lamp[data-state="working"] .lamp__bulb { background: var(--signal); }
+.lamp[data-state="working"] .lamp__bulb { animation: breathe 1.6s ease-in-out infinite; }
+.lamp[data-state="gated"] .lamp__bulb { background: var(--gate); }
+.lamp[data-state="gated"] .lamp__text { color: var(--gate); }
+
+@keyframes breathe {
+  50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 26%, transparent); }
+}
+
+/* ---- transcript ----------------------------------------------------- */
+
+.transcript {
+  overflow-y: auto;
+  padding: 14px 24px 24px 0;
+}
+
+.blank {
+  padding: 56px 0 0 var(--rail);
+  max-width: 46ch;
+}
+
+.blank__title {
+  margin: 0 0 8px;
+  font: 500 12px/1 var(--display);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.blank__body {
+  margin: 0;
+  color: var(--ink-dim);
+}
+
+/* ---- one entry, hung off the wire ----------------------------------- */
+
+.entry {
+  display: grid;
+  grid-template-columns: var(--rail) minmax(0, 1fr);
+  padding: 9px 0;
+  --trace: var(--rule-firm);
+  --accent: var(--ink-dim);
+}
+
+.entry--model { --trace: var(--signal); --accent: var(--signal); }
+.entry--gate { --trace: var(--gate); --accent: var(--gate); }
+.entry--fault { --trace: var(--gate); --accent: var(--gate); }
+
+.rail {
+  grid-row: 1 / span 2;
+  position: relative;
+}
+
+.rail::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -9px;
+  bottom: -9px;
+  width: 1px;
+  transform: translateX(-50%);
+  background-color: var(--trace);
+}
+
+.node {
+  position: absolute;
+  left: 50%;
+  top: 5px;
+  width: 7px;
+  height: 7px;
+  transform: translateX(-50%);
+  background: var(--accent);
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px var(--panel);
+}
+
+.entry--you .node { border-radius: 0; }
+.entry--tool .node { border-radius: 1px; transform: translateX(-50%) rotate(45deg); }
+
+/* A pending gate opens the circuit: the trace goes dashed and the node hollow. */
+.entry--gate.is-pending .rail::before {
+  background-image: repeating-linear-gradient(var(--gate) 0 3px, transparent 3px 8px);
+  background-color: transparent;
+}
+
+.entry--gate.is-pending .node {
+  background: var(--panel);
+  border: 1.5px solid var(--gate);
+}
+
+/* Tokens moving down the wire. */
+.entry.is-live .rail::before {
+  background-image: linear-gradient(var(--panel), var(--signal), var(--panel));
+  background-size: 1px 46px;
+  background-repeat: no-repeat;
+  animation: travel 1.5s linear infinite;
+}
+
+@keyframes travel {
+  from { background-position-y: -46px; }
+  to { background-position-y: 100%; }
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 2px;
+}
+
+.origin {
+  font: 500 10px/1.4 var(--display);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.stamp {
+  font: 10px/1.4 var(--mono);
+  color: var(--ink-dim);
+  opacity: 0.85;
+}
+
+.text {
+  max-width: 76ch;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.entry--you .text { color: var(--ink); }
+
+.reason {
+  max-width: 76ch;
+  margin-bottom: 8px;
+  padding-left: 11px;
+  border-left: 1px solid var(--rule);
+  color: var(--ink-dim);
+  font-size: 14px;
+  white-space: pre-wrap;
+}
+
+.animate-in { animation: rise 0.22s ease-out; }
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(5px); }
+}
+
+/* ---- tool call ------------------------------------------------------ */
+
+.cmd {
+  font: 12.5px/1.5 var(--mono);
+  overflow-wrap: anywhere;
+}
+
+.out {
+  margin: 5px 0 0;
+  padding: 7px 10px;
+  max-height: 5.2em;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--plate);
+  color: var(--ink-dim);
+  font: 12px/1.45 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: zoom-in;
+  -webkit-mask-image: linear-gradient(#000 60%, transparent);
+  mask-image: linear-gradient(#000 60%, transparent);
+}
+
+.out.is-open {
+  max-height: none;
+  cursor: zoom-out;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.out.is-fault { color: var(--gate); }
+
+/* ---- gate ----------------------------------------------------------- */
+
+/* Loud only while it blocks the wire; once decided it recedes to history. */
+.gate {
+  padding: 11px 13px;
+  border: 1px solid var(--rule-firm);
+  border-radius: 3px;
+  background: var(--plate);
+}
+
+.entry--gate.is-pending .gate { border-color: var(--gate); }
+
+.gate__what {
+  font: 12.5px/1.5 var(--mono);
+  overflow-wrap: anywhere;
+}
+
+.gate__diff {
+  margin: 9px 0 0;
+  padding: 8px 10px;
+  max-height: 240px;
+  overflow: auto;
+  border-radius: 2px;
+  background: var(--shade);
+  font: 12px/1.45 var(--mono);
+  white-space: pre;
+}
+
+.diff-add { color: var(--signal); }
+.diff-del { color: var(--gate); }
+.diff-meta { color: var(--ink-dim); }
+
+.gate__choices {
+  display: flex;
+  gap: 7px;
+  margin-top: 11px;
+}
+
+.choice {
+  padding: 6px 13px;
+  border: 1px solid var(--rule-firm);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--ink);
+  font: 500 10px/1.4 var(--display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.choice:hover { background: var(--shade); }
+.choice--primary { border-color: var(--signal); color: var(--signal); }
+.choice--deny { border-color: var(--gate); color: var(--gate); }
+
+.gate__note {
+  margin-top: 9px;
+  font: 11px/1.5 var(--mono);
+  color: var(--ink-dim);
+}
+
+.gate__verdict {
+  margin-top: 9px;
+  font: 500 10px/1.4 var(--display);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+/* ---- composer ------------------------------------------------------- */
+
+.composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 12px 24px 14px;
+  border-top: 1px solid var(--rule-firm);
+  background: linear-gradient(transparent, var(--shade));
+}
+
+.composer__input {
+  flex: 1;
+  max-height: 200px;
+  padding: 10px 13px;
+  border: 1px solid var(--rule-firm);
+  border-radius: 3px;
+  background: var(--plate);
+  color: inherit;
+  font: inherit;
+  resize: none;
+}
+
+.composer__input::placeholder { color: var(--ink-dim); }
+
+.composer__send {
+  padding: 11px 19px;
+  border: 1px solid var(--signal);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--signal);
+  font: 500 11px/1 var(--display);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.composer__send:hover:not(:disabled) { background: color-mix(in srgb, var(--signal) 12%, transparent); }
+.composer__send:disabled { border-color: var(--rule-firm); color: var(--ink-dim); cursor: default; }
+
+:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-in,
+  .entry.is-live .rail::before,
+  .lamp[data-state="working"] .lamp__bulb { animation: none; }
+}

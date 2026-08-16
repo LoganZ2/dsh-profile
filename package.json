@@ -10,6 +10,10 @@
       "types": "./lib/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./bridge": {
+      "types": "./lib/bridge/index.d.ts",
+      "default": "./lib/bridge/index.js"
+    },
     "./anchored": {
       "types": "./lib/anchored/index.d.ts",
       "default": "./lib/anchored/index.js"
@@ -53,12 +57,18 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "*",
-    "@deepseek-ai/dsh-tools": "*"
+    "@deepseek-ai/dsh-tools": "*",
+    "@deepseek-ai/dsh-agent": "*",
+    "@deepseek-ai/dsh-llm": "*",
+    "@deepseek-ai/dsh-session": "*"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-tools": "^0.1.0-rc.5",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "@deepseek-ai/dsh-agent": "^0.1.0-rc.5",
+    "@deepseek-ai/dsh-llm": "^0.1.0-rc.5",
+    "@deepseek-ai/dsh-session": "^0.1.0-rc.5"
   },
   "license": "MIT"
 }

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; font-src 'self'">
+  <title>dsh</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="faceplate">
+    <div class="mark"><span class="mark__bar"></span>dsh</div>
+    <div class="plates">
+      <div class="plate"><span class="plate__label">Profile</span><span class="plate__value" id="plate-profile">—</span></div>
+      <div class="plate"><span class="plate__label">Model</span><span class="plate__value" id="plate-model">—</span></div>
+      <div class="plate"><span class="plate__label">Tools</span><span class="plate__value" id="plate-tools">—</span></div>
+    </div>
+    <div class="lamp" id="lamp" data-state="starting"><span class="lamp__bulb"></span><span class="lamp__text" id="lamp-text">Starting harness</span></div>
+  </header>
+
+  <main class="transcript" id="transcript" aria-live="polite">
+    <section class="blank" id="blank">
+      <h1 class="blank__title">Wire idle</h1>
+      <p class="blank__body">Send a prompt to open a session. Tool calls that need approval stop here on an open circuit until you decide.</p>
+    </section>
+  </main>
+
+  <form class="composer" id="composer">
+    <textarea id="input" class="composer__input" rows="1" placeholder="Type a prompt" spellcheck="false"></textarea>
+    <button type="submit" id="send" class="composer__send">Send</button>
+  </form>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

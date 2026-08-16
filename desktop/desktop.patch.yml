@@ -1,0 +1,13 @@
+# Desktop host overlay: passed via `--patch` by the desktop app (never part
+# of the profile). Swaps the one-shot terminal driver for the bridge server —
+# same engine, different face.
+
+- id: headless-startup
+  disabled: true
+
+- id: headless-runner
+  disabled: true
+
+- insert:
+    - id: bridge
+      name: 'dsh-bundle-loganz2/bridge'
