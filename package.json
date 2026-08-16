@@ -1,7 +1,7 @@
 {
   "name": "dsh-bundle-loganz2",
   "version": "0.1.0",
-  "description": "A DeepSeek Harness bundle: adds a shout tool and a ctx.shout service to any profile.",
+  "description": "A DeepSeek Harness bundle that replaces the stock LLM layer with a pi-ai-native one: OAuth providers and a WebSocket transport toggle.",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -12,6 +12,9 @@
     },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
+  },
+  "bin": {
+    "dsh-llm-pi-login": "./lib/login.js"
   },
   "files": [
     "lib",
@@ -26,13 +29,14 @@
     "build": "tsc -p tsconfig.json",
     "prepare": "tsc -p tsconfig.json"
   },
+  "dependencies": {
+    "@earendil-works/pi-ai": "^0.82.1"
+  },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "*",
-    "@deepseek-ai/dsh-tools": "*"
+    "@deepseek-ai/cordis": "*"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-tools": "^0.1.0-rc.5",
     "typescript": "^5.9.2"
   },
   "license": "MIT"

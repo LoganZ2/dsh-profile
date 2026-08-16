@@ -1,9 +1,32 @@
-# dsh-bundle-loganz2 — this bundle's patch layer.
+# dsh-bundle-loganz2 — replace the harness LLM layer with our pi-ai-native one.
 #
-# Applied over whatever the layers below it composed. Installing this package
-# into a profile appends it to that profile's `bundles` list, so these rows
-# join the tree and stay patchable by the profile's own cordis.patch.yml.
+# Applied over whatever the layers below composed (dsh-base in our profile).
+# The stock rows stay in the tree but disabled — a patch cannot rename a row,
+# so a swap is disable + insert.
+
+- id: llm
+  disabled: true
+
+- id: llm-pi-ai
+  disabled: true
+
+- id: llm-deepseek
+  disabled: true
+
+# Retry rode on the stock llm vocabulary; revisit once our layer owns policy.
+- id: llm-retry
+  disabled: true
 
 - insert:
-    - id: shout
+    - id: llm-pi
       name: 'dsh-bundle-loganz2'
+      config:
+        providers:
+          # OAuth route: `dsh-llm-pi-login openai-codex` once, then requests
+          # authenticate and refresh on their own. The transport variable is
+          # the WebSocket toggle; codex's wire honors it (SSE fallback).
+          openai-codex:
+            transport: websocket
+          # API-key catalog route: key comes from the stored credential
+          # (`dsh-llm-pi-login deepseek --api-key`) or ambient env.
+          deepseek: {}

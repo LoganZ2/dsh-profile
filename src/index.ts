@@ -1,103 +1,53 @@
 /**
- * A first DeepSeek Harness plugin, in TypeScript.
+ * dsh-bundle-loganz2 — our own LLM layer for the DeepSeek Harness, built
+ * directly on pi-ai.
  *
- * It does both halves of the dsh extension model:
- *   1. CONSUMER  — registers a model-facing tool into the existing `ctx.tools`.
- *   2. PROVIDER  — claims a brand-new service name, `ctx.shout`, that nothing
- *                  had pre-registered.
+ * The bundle's patch disables the stock harness LLM rows (`llm`, `llm-pi-ai`,
+ * `llm-deepseek`, `llm-retry`) and this plugin claims `ctx.llm` in their
+ * place. What the stock layer never had, this one does:
  *
- * @module dsh-plugin-shout
+ *   - OAuth providers (openai-codex, github-copilot, anthropic, openrouter,
+ *     kimi-coding, xai) through pi-ai's own login flows and an injected
+ *     credential store — run the bundled login CLI once, then requests
+ *     authenticate and refresh on their own.
+ *   - A per-route `transport` variable (`sse` | `websocket` |
+ *     `websocket-cached` | `auto`), honored wherever the wire protocol
+ *     supports it — including hand-declared responses-format routes over
+ *     `openai-codex-responses`, the WebSocket-capable wire.
+ *
+ * @module dsh-bundle-loganz2
  */
 
-import { Service, type Context } from '@deepseek-ai/cordis'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import type { Context } from '@deepseek-ai/cordis'
+import { PiLlm } from './service.ts'
+import type { Config } from './providers.ts'
 
-/**
- * Teach TypeScript that `ctx.shout` exists. This is declaration merging: it
- * adds a typed property to every `Context` in the program and emits no runtime
- * code at all. Claiming the name at runtime is `super(ctx, 'shout')` below.
- */
-declare module '@deepseek-ai/cordis' {
-  interface Context {
-    shout: ShoutService
-  }
-}
-
-/** Deployment options for the shout plugin. */
-export interface Config {
-  /** How many exclamation marks to append. */
-  intensity?: number
-}
-
-/**
- * The service behind `ctx.shout`. Any other plugin can now call
- * `ctx.shout.render('hi')` after declaring `inject: ['shout']`.
- */
-export class ShoutService extends Service {
-  private readonly intensity: number
-
-  constructor(ctx: Context, config: Config = {}) {
-    // This one line is what claims the name `shout` on the context.
-    super(ctx, 'shout')
-    this.intensity = Math.max(0, config.intensity ?? 3)
-  }
-
-  /**
-   * Uppercase text and append the configured emphasis.
-   * @param text - the text to shout.
-   * @returns the shouted text.
-   */
-  render(text: string): string {
-    return text.toUpperCase() + '!'.repeat(this.intensity)
-  }
-}
+export { PiLlm } from './service.ts'
+export type { Config, DeclaredModel, RouteConfig } from './providers.ts'
+export { FileCredentialStore, fallbackAuthPath } from './store.ts'
+export type {
+  ContentBlock,
+  GenerateOptions,
+  LlmCallConfig,
+  LlmFailure,
+  Message,
+  PreparedLlmCall,
+  StreamChunk,
+  TokenUsage,
+  ToolSchema,
+} from './vocab.ts'
 
 /** The plugin's name, shown in Cordis diagnostics. */
-export const name = 'shout'
+export const name = 'llm-pi'
 
-/** Wait for the tool registry before mounting. */
-export const inject = ['tools']
+/** Nothing to wait for: this layer only provides. */
+export const inject: string[] = []
 
 /**
- * Mount the service and register the model-facing tool.
+ * Claim `ctx.llm` with the pi-ai-native service.
  * @param ctx - the context this plugin was mounted into.
- * @param config - deployment configuration from the profile's YAML row.
+ * @param config - provider routes from the profile's YAML row.
  */
 export function apply(ctx: Context, config: Config = {}): void {
-  // Providing a service: `ctx.shout` exists from here until this plugin unloads.
-  new ShoutService(ctx, config)
-
-  // Consuming a service: add a tool to the registry someone else owns.
-  ctx.tools.register(defineTool({
-    name: 'shout',
-    description:
-      'Uppercase a short piece of text and add emphasis. A demonstration tool '
-      + 'contributed by a user-installed dsh plugin.',
-    parameters: {
-      text: {
-        type: 'string',
-        required: true,
-        description: 'The text to shout.',
-      },
-    },
-    output: {
-      schema: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          shouted: { type: 'string', required: true },
-        },
-      },
-      render: (_args, value) => [{ type: 'text', text: value.shouted }],
-    },
-    execute(args) {
-      return Promise.resolve({ shouted: ctx.shout.render(args.text) })
-    },
-    presentCall: args => ({
-      card: 'generic',
-      title: 'Shout',
-      kind: 'other',
-      rawInput: args.text,
-    }),
-  }))
+  new PiLlm(ctx, config)
 }
