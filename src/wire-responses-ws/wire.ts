@@ -46,6 +46,14 @@ export function webSocketUrl(baseUrl: string): string {
   return url.toString()
 }
 
+/** Node's error event carries the real cause on `error`, and an empty `message`. */
+function socketErrorText(event: { message?: string, error?: { message?: string } }): string | undefined {
+  const text = event.error?.message ?? ''
+  if (text.length > 0) return text
+  const fallback = event.message ?? ''
+  return fallback.length > 0 ? fallback : undefined
+}
+
 interface SocketLike {
   send(data: string): void
   close(code?: number, reason?: string): void
@@ -101,9 +109,15 @@ async function connect(
       cleanup()
       resolve(socket)
     }
-    const onError = (event: { message?: string }): void => fail(new Error(event.message ?? 'websocket error'))
+    // A refused upgrade is the common failure — wrong path, no socket support,
+    // a rejected key — so say which URL was dialed and what came back.
+    const onError = (event: { message?: string, error?: { message?: string } }): void =>
+      fail(new Error(`could not open a websocket to ${url}: ${socketErrorText(event) ?? 'the connection was refused or the upgrade rejected'}`))
     const onClose = (event: { code?: number, reason?: string }): void =>
-      fail(new Error(`websocket closed before opening (${event.code ?? 0}${event.reason === undefined || event.reason === '' ? '' : ` ${event.reason}`})`))
+      fail(new Error(
+        `could not open a websocket to ${url}: closed before opening`
+        + ` (code ${event.code ?? 0}${event.reason === undefined || event.reason === '' ? '' : `, ${event.reason}`})`,
+      ))
     socket.addEventListener('open', onOpen as never)
     socket.addEventListener('error', onError as never)
     socket.addEventListener('close', onClose as never)
@@ -139,8 +153,8 @@ async function* frames(socket: SocketLike, signal?: AbortSignal): AsyncGenerator
     bump()
   }
   const onClose = (): void => { done = true; bump() }
-  const onError = (event: { message?: string }): void => {
-    failure = new Error(event.message ?? 'websocket error')
+  const onError = (event: { message?: string, error?: { message?: string } }): void => {
+    failure = new Error(`websocket failed mid-response: ${socketErrorText(event) ?? 'the connection dropped'}`)
     done = true
     bump()
   }
