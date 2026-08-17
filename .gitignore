@@ -1,10 +1,20 @@
 # --- local test harness ---------------------------------------------------
-# `home/` is a scratch DSH_HOME used to test this bundle. It is machine-local:
-# dsh writes credentials, settings, and full session transcripts into it, and
-# its profile manifest holds an absolute `link:` path to this checkout. None of
-# that belongs in the repo — this package is the deliverable, not the profile
-# that happens to install it.
-home/
+# `home/` is a scratch DSH_HOME used to test this bundle: dsh writes
+# credentials, settings, and full session transcripts into it, none of which
+# belongs in the repo. The profile's cordis files are the exception — the
+# pick-list is the record of which rows this harness mounts, and that decision
+# is worth keeping. Re-including them means un-excluding each parent directory:
+# git cannot rescue a file out of an excluded directory.
+#
+# `home/profiles/loganz2/package.json` stays ignored: it pins an absolute
+# `link:` path to this checkout, so it is true only on this machine.
+home/*
+!home/profiles/
+home/profiles/*
+!home/profiles/loganz2/
+home/profiles/loganz2/*
+!home/profiles/loganz2/cordis.yml
+!home/profiles/loganz2/cordis.patch.yml
 
 # --- build output ---------------------------------------------------------
 # `lib/` is not tracked: the `prepare` script builds it automatically on

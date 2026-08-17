@@ -1,0 +1,183 @@
+# loganz2 — a pure pick-list profile. No bundles: every row below is an
+# explicit choice, naming its package directly. Configs mirror what the stock
+# bundles attach to the same rows, minus what this profile deliberately omits
+# (shell tools, fs, subagents, sandbox, web).
+
+- insert:
+    # --- foundations -------------------------------------------------------
+    - id: timer
+      name: '@deepseek-ai/cordis-plugin-timer'
+
+    - id: hmr
+      name: '@deepseek-ai/cordis-plugin-hmr'
+      config:
+        root: ['.']
+
+    - id: settings
+      name: '@deepseek-ai/dsh-settings-file'
+
+    - id: credentials
+      name: '@deepseek-ai/dsh-credentials-local'
+
+    - id: attachment-local
+      name: '@deepseek-ai/dsh-attachment-local'
+
+    - id: shell-env
+      name: '@deepseek-ai/dsh-shell-env'
+
+    # --- sessions ----------------------------------------------------------
+    - id: session
+      name: '@deepseek-ai/dsh-session'
+
+    - id: session-persistence-jsonl
+      name: '@deepseek-ai/dsh-session-persistence-jsonl'
+      config:
+        root: !!js dshHomePath('sessions')
+
+    - id: session-query-sqlite
+      name: '@deepseek-ai/dsh-session-query-sqlite'
+      config:
+        path: ':memory:'
+        openAt: never
+
+    # Durability checkpoints before each model request and top-level dispatch,
+    # so a killed desktop window loses at most the in-flight step.
+    - id: session-checkpoint-policy
+      name: '@deepseek-ai/dsh-session-checkpoint-policy'
+
+    # Titles for the session picker. The provider takes no route of its own:
+    # it reuses whichever model answered the conversation.
+    - id: session-title
+      name: '@deepseek-ai/dsh-session-title'
+      config:
+        fallbackMaxWords: 5
+        fallbackMaxBytes: 40
+        maxTitleBytes: 80
+
+    - id: session-title-llm
+      name: '@deepseek-ai/dsh-session-title-first-prompt-llm'
+      config:
+        targetWords: 5
+        targetCjkCharacters: 10
+        maxInputBytes: 4096
+        maxOutputTokens: 64
+        timeoutMs: 60000
+
+    - id: token-meter
+      name: '@deepseek-ai/dsh-token-meter'
+
+    # --- llm: ours ---------------------------------------------------------
+    - id: llm-pi
+      name: 'dsh-bundle-loganz2'
+      config:
+        providers:
+          openai-codex:
+            transport: websocket
+          deepseek: {}
+
+    # --- consent gate + tools: ours, opencode-style ------------------------
+    - id: permission
+      name: 'dsh-bundle-loganz2/permission'
+      config:
+        # No interactive approver in one-shot runs, so `ask` falls back to
+        # deny; everything the run should do must be allowed here.
+        askFallback: deny
+        rules:
+          read: allow
+          glob: allow
+          grep: allow
+          edit: allow
+          external_directory: deny
+          bash:
+            '*': deny
+            'ls *': allow
+            'cat *': allow
+            'git status': allow
+            'git diff *': allow
+            'echo *': allow
+            'node *': allow
+            'pnpm run *': allow
+
+    - id: tool-fs
+      name: 'dsh-bundle-loganz2/tool-fs'
+
+    - id: tool-bash
+      name: 'dsh-bundle-loganz2/tool-bash'
+
+    # Two-phase catalog: first request sees bash+edit only, full catalog
+    # after the first durable tool call or assistant reply; post-compaction
+    # requests re-narrow with the core work set added.
+    - id: anchored
+      name: 'dsh-bundle-loganz2/anchored'
+      config:
+        bootstrapTools: [bash, edit]
+        compactionTools: [read, write, edit, glob, grep]
+
+    # --- plan mode: stock state/UX, our enforcement ------------------------
+    - id: user-questions
+      name: '@deepseek-ai/dsh-user-questions'
+
+    - id: plan-mode
+      name: '@deepseek-ai/dsh-plan-mode'
+      config:
+        section: >-
+          Plan mode is active. Research and design only: read, glob, grep, and
+          read-only commands are available, but do not edit files or run
+          mutating commands. Present a plan and use exit_plan_mode when ready.
+
+    # --- agent stack (stock loop over our llm) -----------------------------
+    - id: system-prompt
+      name: '@deepseek-ai/dsh-system-prompt'
+      config:
+        persona: >-
+          You are a coding agent powered by the {{model}} model. Your working
+          directory is {{cwd}}.
+
+    - id: tools
+      name: '@deepseek-ai/dsh-tools'
+
+    - id: agent
+      name: '@deepseek-ai/dsh-agent'
+
+    - id: agent-default-model
+      name: '@deepseek-ai/dsh-agent-default-model'
+      config:
+        provider: deepseek
+        model: deepseek-v4-flash
+
+    - id: agent-instructions
+      name: '@deepseek-ai/dsh-agent-instructions'
+      config:
+        maxBytes: 65536
+
+    - id: agent-loop
+      name: '@deepseek-ai/dsh-agent-loop'
+      config:
+        agents: []
+
+    # --- compaction --------------------------------------------------------
+    - id: compaction-basic
+      name: '@deepseek-ai/dsh-compaction-basic'
+
+    - id: tool-result-pruner
+      name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+      config:
+        thresholdChars: 8192
+        headChars: 4096
+        tailChars: 1024
+
+    - id: commands
+      name: '@deepseek-ai/dsh-commands'
+
+    - id: command-compact
+      name: '@deepseek-ai/dsh-command-compact'
+
+    # --- driver (one-shot headless) ----------------------------------------
+    - id: headless-startup
+      name: '@deepseek-ai/dsh-headless/startup'
+
+    - id: headless-runner
+      name: '@deepseek-ai/dsh-headless'
+      inject: [headlessStartup]
+      config:
+        task: !!js ctx.headlessStartup.task
