@@ -18,6 +18,7 @@ const rack = document.getElementById('rack')
 const rackToggle = document.getElementById('rack-toggle')
 const settingsButton = document.getElementById('settings')
 const modelSelect = document.getElementById('model')
+const modeButton = document.getElementById('mode')
 const workspaceButton = document.getElementById('workspace')
 const workspaceName = document.getElementById('workspace-name')
 const sessionList = document.getElementById('session-list')
@@ -454,6 +455,10 @@ function apply(message) {
     case 'models':
       renderModels(message.models ?? [], message.current)
       return
+    case 'mode':
+      // The harness is the authority on what actually took effect.
+      showMode(message.mode, message.applied)
+      return
     case 'session': {
       sessionId = message.sessionId
       const row = sessionRows.find(entry => entry.id === sessionId)
@@ -512,6 +517,32 @@ function submit() {
     ...(sessionId === undefined && workspace !== undefined ? { cwd: workspace } : {}),
   })
 }
+
+/* ---- mode ------------------------------------------------------------- */
+
+/** 'plan' researches and is denied edits; 'build' acts. */
+let mode = 'build'
+
+function showMode(next, applied) {
+  mode = next
+  modeButton.dataset.mode = next
+  for (const side of modeButton.querySelectorAll('.switch__side')) {
+    const on = side.dataset.side === next
+    side.setAttribute('aria-pressed', String(on))
+    side.title = side.dataset.side === 'plan'
+      ? 'Reads and searches; edits are refused'
+      : 'Edits and commands, subject to the usual gates'
+  }
+  // A switch inside a running turn only lands at the next step boundary.
+  if (applied === 'queued') addNote('Plan mode takes effect at the next step')
+}
+
+modeButton.addEventListener('click', (event) => {
+  const side = event.target.closest('.switch__side')
+  if (side === null || side.dataset.side === mode) return
+  showMode(side.dataset.side)
+  bridge.send({ type: 'mode', mode: side.dataset.side, ...(sessionId === undefined ? {} : { sessionId }) })
+})
 
 /* ---- workspace -------------------------------------------------------- */
 

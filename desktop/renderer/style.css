@@ -754,3 +754,42 @@ body {
 /* A note carries only its own label — no body, no timestamp emphasis. */
 .entry--note { --trace: var(--rule-firm); --accent: var(--ink-dim); }
 .entry--note .node { width: 5px; height: 5px; }
+
+/* A two-position switch: both modes are always legible, so the label can
+   never be mistaken for the action. The lit side is the one in force. */
+.switch {
+  display: flex;
+  flex: 0 0 auto;
+  padding: 1px;
+  border: 1px solid var(--rule-firm);
+  border-radius: 3px;
+  background: var(--panel);
+}
+
+.switch__side {
+  padding: 3px 9px;
+  border: none;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--ink-dim);
+  font: 500 9.5px/1.4 var(--display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.switch__side:hover[aria-pressed="false"] { color: var(--ink); }
+
+/* Build is the ordinary state; plan is a restriction and wears the colour
+   restrictions wear everywhere else here. */
+.switch__side[aria-pressed="true"] {
+  background: var(--plate);
+  box-shadow: inset 0 0 0 1px var(--rule-firm);
+  color: var(--ink);
+  cursor: default;
+}
+
+.switch[data-mode="plan"] .switch__side[data-side="plan"] {
+  box-shadow: inset 0 0 0 1px var(--gate);
+  color: var(--gate);
+}

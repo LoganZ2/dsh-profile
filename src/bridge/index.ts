@@ -10,6 +10,7 @@
  *   {type:'resume', sessionId}            reopen a persisted conversation
  *   {type:'session_delete', sessionId}    forget one for good, log and all
  *   {type:'stop', sessionId?}             abort the running turn
+ *   {type:'mode', mode, sessionId?}       'plan' researches, 'build' acts
  *   {type:'models'}                       what models the routes serve
  *   {type:'model_select', provider, model, sessionId?}   switch model
  *
@@ -20,6 +21,7 @@
  *   {type:'history', sessionId, events}   a resumed conversation's whole log
  *   {type:'deleted', sessionId}           that conversation is gone
  *   {type:'models', models, current}      the catalog and the selection
+ *   {type:'mode', mode, applied}          the mode, and when it took effect
  *   {type:'event', sessionId, event}      one durable session event, live
  *   {type:'idle', sessionId}              the turn settled
  *   {type:'permission_ask', id, request}  approval needed; reply by id
@@ -167,6 +169,8 @@ export function apply(ctx: Context, config: Config = {}): void {
     dispose?: () => void
     selection: ModelSelectionRef
   }>()
+  /** The mode a conversation should start in, as the client last chose. */
+  let pendingMode: 'plan' | 'build' = 'build'
   let client: net.Socket | undefined
   let releaseResponder: (() => void) | undefined
   const pendingAsks = new Map<string, (reply: PermissionReply) => void>()
@@ -224,6 +228,10 @@ export function apply(ctx: Context, config: Config = {}): void {
       })
       : await registry.resume({ resumeSessionId: SessionId(sessionId), agentOptions, setup })
 
+    if (pendingMode === 'plan') {
+      const planMode = ctx.get('planMode') as { set(agent: unknown, active: boolean): string } | undefined
+      planMode?.set(created.agent, true)
+    }
     agents.set(sessionId, {
       agent: created.agent,
       selection: selected,
@@ -389,6 +397,37 @@ export function apply(ctx: Context, config: Config = {}): void {
         void handleResume(requested).catch((error: unknown) => {
           send({ type: 'error', message: error instanceof Error ? error.message : String(error) })
         })
+        return
+      }
+      case 'mode': {
+        const wanted = message['mode']
+        if (wanted !== 'plan' && wanted !== 'build') {
+          send({ type: 'error', message: "mode needs 'plan' or 'build'" })
+          return
+        }
+        const requested = typeof message['sessionId'] === 'string' ? message['sessionId'] : undefined
+        const held = requested === undefined
+          ? (agents.size === 1 ? [...agents.values()][0] : undefined)
+          : agents.get(requested)
+        if (held === undefined) {
+          // Nothing open yet: remember it for the conversation about to start.
+          pendingMode = wanted
+          send({ type: 'mode', mode: wanted, applied: 'pending' })
+          return
+        }
+        const planMode = ctx.get('planMode') as
+          | { set(agent: unknown, active: boolean): string, get(agent: unknown): { active: boolean } }
+          | undefined
+        if (planMode === undefined) {
+          send({ type: 'error', message: 'plan mode is not mounted in this profile' })
+          return
+        }
+        // Mid-turn the switch is queued until the next step boundary; the
+        // service says which happened, so pass that on rather than implying
+        // it took effect now.
+        const applied = planMode.set(held.agent, wanted === 'plan')
+        pendingMode = wanted
+        send({ type: 'mode', mode: wanted, applied })
         return
       }
       case 'stop': {
