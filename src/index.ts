@@ -22,6 +22,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
 import { PiLlm } from './service.ts'
+import { buildProvider, catalogById } from './providers.ts'
 import type { Config } from './providers.ts'
 
 export { PiLlm } from './service.ts'
@@ -88,8 +89,33 @@ export function apply(ctx: Context, config: Config = {}): void {
   // Optional by construction: installSettingsSection injects `settings`
   // itself, so this layer still mounts in a profile without that row.
   let read: () => Config = () => config
+  // Registration resolves whatever is already stored through `validate`, and a
+  // throw there takes the whole section down — leaving the user no surface on
+  // which to see or repair the value. So the stored table is admitted on the
+  // way in, and only the writes that follow are held to the rule.
+  let strict = false
   installSettingsSection(ctx, LLM_PI_NAMESPACE, CONFIG_SCHEMA as never, config as never, {
     setSource: (current: () => Config) => { read = current },
-    onChange: () => { llm.configure(read()) },
+    // A stored table this layer cannot build must not take the section down
+    // with it: registration is what lets the user SEE and repair the value,
+    // so the routes stay as they were and the reason is said out loud.
+    onChange: () => {
+      try {
+        llm.configure(read())
+      } catch (error: unknown) {
+        ctx.logger.error(`llm-pi: keeping the previous routes — ${error instanceof Error ? error.message : String(error)}`)
+      } finally {
+        strict = true
+      }
+    },
+    // Refuse a bad table at the write that produces it, so the settings
+    // surface reports it instead of storing something unusable.
+    validate: (section: Config) => {
+      if (!strict) return
+      const catalog = catalogById()
+      for (const [routeId, route] of Object.entries(section.providers ?? {})) {
+        buildProvider(routeId, route, catalog)
+      }
+    },
   } as never)
 }
