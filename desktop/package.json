@@ -2,6 +2,7 @@
   "name": "dsh-desktop",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.33.0",
   "description": "Electron shell for the loganz2 harness: spawns the engine with the bridge driver and renders the conversation.",
   "main": "main.cjs",
   "scripts": {
@@ -9,5 +10,10 @@
   },
   "devDependencies": {
     "electron": "^33.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron"
+    ]
   }
 }

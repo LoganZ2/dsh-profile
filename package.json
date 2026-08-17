@@ -1,6 +1,7 @@
 {
   "name": "dsh-bundle-loganz2",
   "version": "0.1.0",
+  "packageManager": "pnpm@10.33.0",
   "description": "A DeepSeek Harness bundle that replaces the stock LLM layer with a pi-ai-native one: OAuth providers and a WebSocket transport toggle.",
   "type": "module",
   "main": "lib/index.js",

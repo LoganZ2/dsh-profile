@@ -39,4 +39,4 @@ fi
 echo "start.sh: DSH_HOME=$DSH_HOME"
 
 cd "$here"
-exec npm start
+exec pnpm start
