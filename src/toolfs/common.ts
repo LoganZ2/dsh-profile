@@ -16,8 +16,13 @@ interface AgentLike {
 /**
  * The project boundary for one call: the workspace its session was opened in.
  * Sessions carry their own cwd, so two conversations in one process can work
- * in different folders; the process directory is only the fallback for a call
- * that arrives without an agent.
+ * in different folders; the process directory is the fallback for a call that
+ * arrives without an agent at all.
+ *
+ * A conversation started with no workspace chosen is opened on the home
+ * directory instead, and has the writing tools withheld — so what roots here
+ * is only reading and shell commands.
+ *
  * @param agent - the calling agent, when the tool was handed one.
  * @returns the absolute directory this call is rooted in.
  */

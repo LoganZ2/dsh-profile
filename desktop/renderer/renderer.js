@@ -359,7 +359,8 @@ function renderSessions(sessions) {
     tab.append(title, meta, close, detail)
     tab.addEventListener('click', () => {
       if (session.id === sessionId || working) return
-      if (session.cwd !== undefined) showWorkspace(session.cwd)
+      sessionId = session.id
+      showWorkspace(session.cwd)
       collapseRack()
       resetTranscript()
       working = true
@@ -459,7 +460,7 @@ function apply(message) {
     case 'session': {
       sessionId = message.sessionId
       const row = sessionRows.find(entry => entry.id === sessionId)
-      if (row?.cwd !== undefined) showWorkspace(row.cwd)
+      showWorkspace(row?.cwd ?? workspace)
       renderSessions(sessionRows)
       return
     }
@@ -574,21 +575,22 @@ let workspace
 function showWorkspace(path) {
   workspace = path
   workspaceName.textContent = path === undefined ? 'no folder' : path.split('/').filter(Boolean).pop() ?? path
-  workspaceButton.title = path === undefined
-    ? 'Choose the folder this conversation works in'
-    : `${path}\nA conversation keeps the folder it opened in; choosing another starts a new one.`
+  // A session's cwd is fixed when it opens, so once one exists the control
+  // states the folder rather than pretending to offer a choice.
+  const locked = sessionId !== undefined
+  workspaceButton.disabled = locked
+  workspaceButton.classList.toggle('is-locked', locked)
+  workspaceButton.title = locked
+    ? `${path ?? 'No folder'}\nFixed for this conversation. Start a new one to work somewhere else.`
+    : path === undefined
+      ? 'Choose a folder. Without one there are no editing tools and commands run from your home directory.'
+      : `${path}\nChoose a folder for this conversation`
 }
 
 workspaceButton.addEventListener('click', async () => {
   const picked = await bridge.pickWorkspace?.()
   if (picked === undefined || picked === workspace) return
   showWorkspace(picked)
-  // A session's workspace is fixed at creation, so a new folder means a new
-  // conversation rather than a silent mismatch with the one on screen.
-  if (sessionId !== undefined) {
-    sessionId = undefined
-    resetTranscript()
-  }
   input.focus()
 })
 
@@ -666,6 +668,7 @@ newSession.addEventListener('click', () => {
   if (working) return
   collapseRack()
   sessionId = undefined
+  showWorkspace(workspace)
   resetTranscript()
   bridge.send({ type: 'sessions' })
   input.focus()

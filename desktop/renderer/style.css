@@ -948,3 +948,12 @@ h4.md-h, h5.md-h, h6.md-h {
 .ask .mini { padding: 5px 11px; }
 .mini--danger { border-color: var(--gate); color: var(--gate); }
 .mini--danger:hover { background: color-mix(in srgb, var(--gate) 12%, transparent); border-color: var(--gate); color: var(--gate); }
+
+/* Fixed for this conversation: it still reads the folder, but says it is
+   not a choice any more. */
+.composer__workspace.is-locked {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.composer__workspace.is-locked:hover { color: var(--ink-dim); }

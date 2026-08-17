@@ -141,6 +141,9 @@ export class BridgeService extends Service {
   }
 }
 
+/** The tools that change a project, withheld when no workspace is declared. */
+const WRITING_TOOLS = ['write', 'edit'] as const
+
 export const name = 'bridge'
 export const inject = ['agents', 'agentDefaultModel', 'sessions', 'sessionQuery', 'permission', 'llm']
 
@@ -210,8 +213,39 @@ export function apply(ctx: Context, config: Config = {}): void {
     }
     const selection = defaultModel.currentSelection()
     const selected: ModelSelectionRef = { current: selection, assembled: undefined }
+    // No folder chosen: the conversation opens on the home directory, which is
+    // where its commands run, and the writing tools are withheld. A session
+    // with no cwd at all is not a state this ecosystem supports — the loop's
+    // own sidecars assume an absolute one.
+    const workspace = cwd !== undefined && isAbsolute(cwd) ? cwd : undefined
+    const root = workspace ?? homedir()
     const setup = (agentCtx: Context): void => {
       installModelSelection(agentCtx, selected)
+      // Say where the work happens, per conversation. The persona cannot: a
+      // conversation may have no workspace, and a prompt variable with no
+      // value fails the assembly outright.
+      const prompt = agentCtx.get('systemPrompt') as
+        | { section(section: { name: string, order: number, text: string }): () => void }
+        | undefined
+      prompt?.section({
+        name: 'workspace',
+        // After the deployment persona at 0, before tool guidance at 100.
+        order: 20,
+        text: workspace === undefined
+          ? 'No workspace is set for this conversation. You cannot create or edit'
+            + ' files — those tools are withheld — and shell commands run from'
+            + ` ${root}. Ask for a folder if the task needs one.`
+          : `Your working directory is ${workspace}. Paths you give tools resolve against it.`,
+      })
+      // No workspace, no writing: the tools that change a project are not even
+      // offered, so the model plans around their absence instead of trying and
+      // being refused.
+      if (workspace === undefined && requested === undefined) {
+        const tools = agentCtx.get('tools') as
+          | { restrict(filter: { deny?: string[] }): () => void }
+          | undefined
+        tools?.restrict({ deny: [...WRITING_TOOLS] })
+      }
     }
     const agentOptions = { provider: selection.provider, model: selection.model }
 
@@ -221,8 +255,9 @@ export function apply(ctx: Context, config: Config = {}): void {
       ? await registry.create({
         sessionId: SessionId(sessionId),
         // The workspace is the session's own: tools root in it, and the
-        // persisted log is filed under it.
-        meta: { cwd: cwd !== undefined && isAbsolute(cwd) ? cwd : process.cwd() },
+        // persisted log is filed under it. With none chosen the session
+        // carries no cwd, which is what withholds the writing tools.
+        meta: { cwd: root },
         agentOptions,
         setup,
       })
