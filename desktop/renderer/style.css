@@ -697,3 +697,48 @@ body {
 .rack.is-expanded .tab__close { position: absolute; top: 7px; right: 8px; }
 .rack.is-expanded .tab { position: relative; }
 
+
+/* The workspace sits beside the model: both are facts about the next send. */
+.composer__workspace {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 2px 6px 2px 0;
+  border: none;
+  background: transparent;
+  color: var(--ink-dim);
+  font: 11px/1.4 var(--mono);
+  cursor: pointer;
+}
+
+.composer__workspace:hover { color: var(--signal); }
+.composer__workspace span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* A folder, drawn rather than spelled: the tab of a hanging file. */
+.composer__folder {
+  flex: 0 0 auto;
+  width: 11px;
+  height: 9px;
+  border: 1px solid currentColor;
+  border-radius: 1px;
+  border-top-width: 3px;
+  border-top-color: transparent;
+  box-shadow: inset 0 2px 0 -1px currentColor;
+  position: relative;
+}
+
+.composer__folder::before {
+  content: "";
+  position: absolute;
+  top: -3px;
+  left: 0;
+  width: 5px;
+  height: 2px;
+  background: currentColor;
+  border-radius: 1px 1px 0 0;
+}
+
+.composer__sill { justify-content: flex-start; gap: 14px; }
+.composer__sill .composer__send { margin-left: auto; }

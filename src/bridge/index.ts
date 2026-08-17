@@ -4,7 +4,7 @@
  * `$DSH_HOME/bridge.sock` and speaks one JSON object per line.
  *
  * Client → server:
- *   {type:'prompt', text, sessionId?}     new conversation, or follow-up
+ *   {type:'prompt', text, sessionId?, cwd?}  new conversation, or follow-up
  *   {type:'permission_reply', id, reply}  reply: 'once' | 'always' | 'reject'
  *   {type:'sessions'}                     list the persisted conversations
  *   {type:'resume', sessionId}            reopen a persisted conversation
@@ -36,7 +36,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { unlinkSync } from 'node:fs'
 import { chmod, mkdir, readdir, rm, stat, unlink } from 'node:fs/promises'
 import net from 'node:net'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
@@ -185,7 +185,7 @@ export function apply(ctx: Context, config: Config = {}): void {
    * @param requested - a session id the client named, if any.
    * @returns the agent and its session id, and whether this call opened it.
    */
-  const openAgent = async (requested: string | undefined): Promise<{
+  const openAgent = async (requested: string | undefined, cwd?: string): Promise<{
     agent: AgentHandle
     sessionId: string
     opened: boolean
@@ -213,7 +213,9 @@ export function apply(ctx: Context, config: Config = {}): void {
     const created = requested === undefined
       ? await registry.create({
         sessionId: SessionId(sessionId),
-        meta: { cwd: process.cwd() },
+        // The workspace is the session's own: tools root in it, and the
+        // persisted log is filed under it.
+        meta: { cwd: cwd !== undefined && isAbsolute(cwd) ? cwd : process.cwd() },
         agentOptions,
         setup,
       })
@@ -304,8 +306,8 @@ export function apply(ctx: Context, config: Config = {}): void {
     await handleSessions()
   }
 
-  const handlePrompt = async (text: string, requestedSession: string | undefined): Promise<void> => {
-    const { agent, sessionId, opened } = await openAgent(requestedSession)
+  const handlePrompt = async (text: string, requestedSession: string | undefined, cwd?: string): Promise<void> => {
+    const { agent, sessionId, opened } = await openAgent(requestedSession, cwd)
     if (opened) send({ type: 'session', sessionId })
     agent.followup(createUserMessage({
       content: [{ type: 'text', text }],
@@ -363,7 +365,8 @@ export function apply(ctx: Context, config: Config = {}): void {
           return
         }
         const requested = typeof message['sessionId'] === 'string' ? message['sessionId'] : undefined
-        void handlePrompt(text, requested).catch((error: unknown) => {
+        const cwd = typeof message['cwd'] === 'string' ? message['cwd'] : undefined
+        void handlePrompt(text, requested, cwd).catch((error: unknown) => {
           send({ type: 'error', message: error instanceof Error ? error.message : String(error) })
         })
         return

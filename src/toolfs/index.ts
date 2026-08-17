@@ -67,11 +67,11 @@ export function apply(ctx: Context): void {
     },
     output: { schema: OUTPUT_SCHEMA, render: RENDER },
     async execute(args, exec) {
-      const filepath = resolvePath(args.filePath)
+      const filepath = resolvePath(args.filePath, exec.agent)
       await assertExternalDirectory(permission, filepath, exec.agent)
       await permission.ask({
         permission: 'read',
-        patterns: [relPattern(filepath)],
+        patterns: [relPattern(filepath, exec.agent)],
         always: ['*'],
         agent: exec.agent,
       })
@@ -103,20 +103,20 @@ export function apply(ctx: Context): void {
     output: { schema: OUTPUT_SCHEMA, render: RENDER },
     isConcurrencySafe: () => false,
     async execute(args, exec) {
-      const filepath = resolvePath(args.filePath)
+      const filepath = resolvePath(args.filePath, exec.agent)
       await assertExternalDirectory(permission, filepath, exec.agent)
       const before = await readFile(filepath, 'utf8').catch(() => '')
       const diff = trimDiff(createTwoFilesPatch(filepath, filepath, before, args.content))
       await permission.ask({
         permission: 'edit',
-        patterns: [relPattern(filepath)],
+        patterns: [relPattern(filepath, exec.agent)],
         always: ['*'],
         metadata: { filepath, diff },
         agent: exec.agent,
       })
       await mkdir(path.dirname(filepath), { recursive: true })
       await writeFile(filepath, args.content)
-      return { output: `Wrote ${relPattern(filepath)}` }
+      return { output: `Wrote ${relPattern(filepath, exec.agent)}` }
     },
   }))
 
@@ -134,20 +134,20 @@ export function apply(ctx: Context): void {
     output: { schema: OUTPUT_SCHEMA, render: RENDER },
     isConcurrencySafe: () => false,
     async execute(args, exec) {
-      const filepath = resolvePath(args.filePath)
+      const filepath = resolvePath(args.filePath, exec.agent)
       await assertExternalDirectory(permission, filepath, exec.agent)
       const before = await readFile(filepath, 'utf8')
       const after = replaceContent(before, args.oldString, args.newString, args.replaceAll ?? false)
       const diff = trimDiff(createTwoFilesPatch(filepath, filepath, before, after))
       await permission.ask({
         permission: 'edit',
-        patterns: [relPattern(filepath)],
+        patterns: [relPattern(filepath, exec.agent)],
         always: ['*'],
         metadata: { filepath, diff },
         agent: exec.agent,
       })
       await writeFile(filepath, after)
-      return { output: `Edited ${relPattern(filepath)}\n${diff}` }
+      return { output: `Edited ${relPattern(filepath, exec.agent)}\n${diff}` }
     },
   }))
 
@@ -160,7 +160,7 @@ export function apply(ctx: Context): void {
     },
     output: { schema: OUTPUT_SCHEMA, render: RENDER },
     async execute(args, exec) {
-      const search = args.path === undefined ? worktree() : resolvePath(args.path)
+      const search = args.path === undefined ? worktree(exec.agent) : resolvePath(args.path, exec.agent)
       await permission.ask({
         permission: 'glob',
         patterns: [args.pattern],
@@ -188,7 +188,7 @@ export function apply(ctx: Context): void {
     },
     output: { schema: OUTPUT_SCHEMA, render: RENDER },
     async execute(args, exec) {
-      const search = args.path === undefined ? worktree() : resolvePath(args.path)
+      const search = args.path === undefined ? worktree(exec.agent) : resolvePath(args.path, exec.agent)
       await permission.ask({
         permission: 'grep',
         patterns: [args.pattern],

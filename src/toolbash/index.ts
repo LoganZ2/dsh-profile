@@ -71,13 +71,13 @@ function expandPath(token: string): string | undefined {
   return undefined
 }
 
-function outsideWorktree(target: string): boolean {
-  const rel = path.relative(worktree(), target)
+function outsideWorktree(target: string, agent: unknown): boolean {
+  const rel = path.relative(worktree(agent), target)
   return rel.startsWith('..') || path.isAbsolute(rel)
 }
 
 /** Split a command into per-simple-command patterns and external dirs. */
-async function scanCommand(command: string): Promise<Scan> {
+async function scanCommand(command: string, agent: unknown): Promise<Scan> {
   const scan: Scan = { dirs: new Set(), patterns: new Set(), always: new Set() }
   const tree = (await parser()).parse(command)
   const commands = tree?.rootNode.descendantsOfType('command') ?? []
@@ -91,7 +91,7 @@ async function scanCommand(command: string): Promise<Scan> {
       for (const token of tokens.slice(1)) {
         if (token.startsWith('-')) continue
         const resolved = expandPath(token)
-        if (resolved === undefined || !outsideWorktree(resolved)) continue
+        if (resolved === undefined || !outsideWorktree(resolved, agent)) continue
         scan.dirs.add(resolved.endsWith('/') ? resolved.slice(0, -1) : path.dirname(resolved))
       }
     }
@@ -140,7 +140,7 @@ export function apply(ctx: Context): void {
     },
     isConcurrencySafe: () => false,
     async execute(args, exec) {
-      const scan = await scanCommand(args.command)
+      const scan = await scanCommand(args.command, exec.agent)
       if (scan.dirs.size > 0) {
         const globs = [...scan.dirs].map(dir => path.join(dir, '*'))
         await permission.ask({
@@ -164,7 +164,7 @@ export function apply(ctx: Context): void {
       const timeoutMs = Math.min(args.timeout ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS)
       const output = await new Promise<string>((resolve, reject) => {
         const child = spawn('/bin/bash', ['-c', args.command], {
-          cwd: worktree(),
+          cwd: worktree(exec.agent),
           env: process.env,
         })
         let combined = ''

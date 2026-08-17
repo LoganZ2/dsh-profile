@@ -8,19 +8,32 @@
 import path from 'node:path'
 import type { PermissionService } from '../permission/index.ts'
 
-/** The project boundary: the process working directory at mount. */
-export function worktree(): string {
-  return process.cwd()
+/** An agent, as far as this module cares: a session with a working directory. */
+interface AgentLike {
+  session?: { header?: { cwd?: string } }
 }
 
-/** Resolve a model-supplied path against the worktree. */
-export function resolvePath(filePath: string): string {
-  return path.isAbsolute(filePath) ? filePath : path.join(worktree(), filePath)
+/**
+ * The project boundary for one call: the workspace its session was opened in.
+ * Sessions carry their own cwd, so two conversations in one process can work
+ * in different folders; the process directory is only the fallback for a call
+ * that arrives without an agent.
+ * @param agent - the calling agent, when the tool was handed one.
+ * @returns the absolute directory this call is rooted in.
+ */
+export function worktree(agent?: unknown): string {
+  const cwd = (agent as AgentLike | undefined)?.session?.header?.cwd
+  return cwd !== undefined && cwd.length > 0 ? cwd : process.cwd()
+}
+
+/** Resolve a model-supplied path against the call's worktree. */
+export function resolvePath(filePath: string, agent?: unknown): string {
+  return path.isAbsolute(filePath) ? filePath : path.join(worktree(agent), filePath)
 }
 
 /** The pattern a path contributes to permission asks: worktree-relative. */
-export function relPattern(filepath: string): string {
-  return path.relative(worktree(), filepath)
+export function relPattern(filepath: string, agent?: unknown): string {
+  return path.relative(worktree(agent), filepath)
 }
 
 function contained(target: string): boolean {

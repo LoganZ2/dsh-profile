@@ -5,7 +5,7 @@
  * neither knows nor cares that Electron exists.
  */
 
-const { app, BrowserWindow, ipcMain } = require('electron')
+const { app, BrowserWindow, dialog, ipcMain } = require('electron')
 const { spawn } = require('node:child_process')
 const { createHash } = require('node:crypto')
 const net = require('node:net')
@@ -83,6 +83,17 @@ function connect(attempt = 0) {
 
 ipcMain.on('bridge:send', (_event, line) => {
   if (socket && !socket.destroyed) socket.write(`${line}\n`)
+})
+
+/** Pick a workspace. The OS picker is the only honest folder chooser here. */
+ipcMain.handle('workspace:pick', async (event) => {
+  const owner = BrowserWindow.fromWebContents(event.sender) ?? win
+  const result = await dialog.showOpenDialog(owner, {
+    title: 'Choose a workspace',
+    properties: ['openDirectory', 'createDirectory'],
+    buttonLabel: 'Use this folder',
+  })
+  return result.canceled ? undefined : result.filePaths[0]
 })
 
 /** Settings live in their own window, opened from the rack and reused after. */

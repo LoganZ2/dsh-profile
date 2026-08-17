@@ -33,6 +33,9 @@
     <form class="composer" id="composer">
       <textarea id="input" class="composer__input" rows="1" placeholder="Type a prompt" spellcheck="false"></textarea>
       <div class="composer__sill">
+        <button type="button" id="workspace" class="composer__workspace" title="Choose the folder this conversation works in">
+          <span class="composer__folder"></span><span id="workspace-name">…</span>
+        </button>
         <select id="model" class="composer__model" title="Model for this conversation"></select>
         <button type="submit" id="send" class="composer__send">Send</button>
       </div>

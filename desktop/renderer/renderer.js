@@ -18,6 +18,8 @@ const rack = document.getElementById('rack')
 const rackToggle = document.getElementById('rack-toggle')
 const settingsButton = document.getElementById('settings')
 const modelSelect = document.getElementById('model')
+const workspaceButton = document.getElementById('workspace')
+const workspaceName = document.getElementById('workspace-name')
 const sessionList = document.getElementById('session-list')
 const newSession = document.getElementById('new-session')
 
@@ -347,6 +349,7 @@ function renderSessions(sessions) {
     tab.append(title, meta, close, detail)
     tab.addEventListener('click', () => {
       if (session.id === sessionId || working) return
+      if (session.cwd !== undefined) showWorkspace(session.cwd)
       collapseRack()
       resetTranscript()
       working = true
@@ -436,10 +439,13 @@ function apply(message) {
     case 'models':
       renderModels(message.models ?? [], message.current)
       return
-    case 'session':
+    case 'session': {
       sessionId = message.sessionId
+      const row = sessionRows.find(entry => entry.id === sessionId)
+      if (row?.cwd !== undefined) showWorkspace(row.cwd)
       renderSessions(sessionRows)
       return
+    }
     case 'sessions':
       renderSessions(message.sessions)
       return
@@ -479,8 +485,39 @@ function submit() {
   working = true
   setPhase()
   openAssistant()
-  bridge.send({ type: 'prompt', text, ...(sessionId === undefined ? {} : { sessionId }) })
+  bridge.send({
+    type: 'prompt',
+    text,
+    ...(sessionId === undefined ? {} : { sessionId }),
+    ...(sessionId === undefined && workspace !== undefined ? { cwd: workspace } : {}),
+  })
 }
+
+/* ---- workspace -------------------------------------------------------- */
+
+/** The folder the next conversation opens in. A session's own cwd is fixed. */
+let workspace
+
+function showWorkspace(path) {
+  workspace = path
+  workspaceName.textContent = path === undefined ? 'no folder' : path.split('/').filter(Boolean).pop() ?? path
+  workspaceButton.title = path === undefined
+    ? 'Choose the folder this conversation works in'
+    : `${path}\nA conversation keeps the folder it opened in; choosing another starts a new one.`
+}
+
+workspaceButton.addEventListener('click', async () => {
+  const picked = await bridge.pickWorkspace?.()
+  if (picked === undefined || picked === workspace) return
+  showWorkspace(picked)
+  // A session's workspace is fixed at creation, so a new folder means a new
+  // conversation rather than a silent mismatch with the one on screen.
+  if (sessionId !== undefined) {
+    sessionId = undefined
+    resetTranscript()
+  }
+  input.focus()
+})
 
 /* ---- model selection -------------------------------------------------- */
 
@@ -572,6 +609,7 @@ input.addEventListener('keydown', (event) => {
   }
 })
 
+showWorkspace(undefined)
 globalThis.dshRenderer = { apply }
 bridge.onMessage(apply)
 setPhase()
