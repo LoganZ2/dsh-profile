@@ -21,7 +21,7 @@ import type {
   MutableModels,
   ThinkingLevel,
 } from '@earendil-works/pi-ai'
-import { buildProvider, catalogById } from './providers.ts'
+import { buildProvider, catalogById, registerProtocol } from './providers.ts'
 import type { Config, RouteConfig } from './providers.ts'
 import { FileCredentialStore, fallbackAuthPath } from './store.ts'
 import { eventChunks, failureChunk, toPiContext } from './translate.ts'
@@ -99,6 +99,31 @@ export class PiLlm extends Service {
     this.routes = routes
     if (routes.size === 0) {
       this.ctx.logger.warn('llm-pi: no providers configured; every request will fail until config.providers names at least one route')
+    }
+  }
+
+  /**
+   * Add a wire protocol, then rebuild so a route already naming it starts
+   * working without a restart.
+   * @param id - the `api` value a route names to select it.
+   * @param factory - builds the provider streams implementation.
+   * @returns a disposer that removes the wire and rebuilds again.
+   */
+  registerProtocol(id: string, factory: () => never): () => void {
+    const release = registerProtocol(id, factory as never)
+    this.rebuild()
+    return () => {
+      release()
+      this.rebuild()
+    }
+  }
+
+  /** Re-apply the current table, tolerating a route the change invalidates. */
+  private rebuild(): void {
+    try {
+      this.configure({ providers: Object.fromEntries(this.routes) })
+    } catch (error: unknown) {
+      this.ctx.logger.error(`llm-pi: keeping the previous routes — ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 

@@ -37,8 +37,11 @@ export interface RouteConfig {
   transport?: Transport
   /** Hand-declared routes only: the endpoint to talk to. */
   baseURL?: string
-  /** Hand-declared routes only: wire protocol from the table below. */
-  api?: 'openai-completions' | 'openai-responses' | 'anthropic-messages' | 'openai-codex-responses'
+  /**
+   * Hand-declared routes only: which wire protocol to speak. The four pi-ai
+   * ships, plus any a mounted wire plugin registered.
+   */
+  api?: string
   /** Hand-declared routes only: env var holding the API key. */
   apiKeyEnv?: string
   /** Hand-declared routes only: the models this route serves. */
@@ -52,11 +55,36 @@ export interface Config {
   providers?: Record<string, RouteConfig>
 }
 
-const PROTOCOLS: Readonly<Record<NonNullable<RouteConfig['api']>, () => ProviderStreams>> = {
-  'openai-completions': openAICompletionsApi,
-  'openai-responses': openAIResponsesApi,
-  'anthropic-messages': anthropicMessagesApi,
-  'openai-codex-responses': openAICodexResponsesApi,
+/**
+ * The wire protocols a route may name. The four pi-ai ships are always here;
+ * a plugin adds its own through {@link registerProtocol}, so a wire lives in
+ * its own row rather than in this table.
+ */
+const PROTOCOLS = new Map<string, () => ProviderStreams>([
+  ['openai-completions', openAICompletionsApi],
+  ['openai-responses', openAIResponsesApi],
+  ['anthropic-messages', anthropicMessagesApi],
+  ['openai-codex-responses', openAICodexResponsesApi],
+])
+
+/**
+ * Add a wire for as long as the caller holds the returned disposer.
+ * @param id - the `api` value a route names to select it.
+ * @param factory - builds the provider streams implementation.
+ * @returns a disposer that removes it again.
+ * @throws if the id is already taken.
+ */
+export function registerProtocol(id: string, factory: () => ProviderStreams): () => void {
+  if (PROTOCOLS.has(id)) throw new Error(`llm-pi: wire protocol "${id}" is already registered`)
+  PROTOCOLS.set(id, factory)
+  return () => {
+    if (PROTOCOLS.get(id) === factory) PROTOCOLS.delete(id)
+  }
+}
+
+/** Every protocol a route may name right now. */
+export function protocolIds(): string[] {
+  return [...PROTOCOLS.keys()]
 }
 
 function declaredModels(routeId: string, route: RouteConfig): Model<Api>[] {
@@ -120,12 +148,15 @@ export function buildProvider(
   if (route.baseURL === undefined || route.api === undefined) {
     throw new Error(
       `llm-pi: route "${routeId}" is not a pi-ai catalog provider, so it must declare baseURL and api`
-      + ` (one of: ${Object.keys(PROTOCOLS).join(', ')})`,
+      + ` (one of: ${protocolIds().join(', ')})`,
     )
   }
-  const factory = PROTOCOLS[route.api]
+  const factory = PROTOCOLS.get(route.api)
   if (factory === undefined) {
-    throw new Error(`llm-pi: route "${routeId}" names unsupported api "${route.api as string}"`)
+    throw new Error(
+      `llm-pi: route "${routeId}" names unsupported api "${route.api as string}"`
+      + ` — available: ${protocolIds().join(', ')}`,
+    )
   }
   if ((route.models ?? []).length === 0) {
     throw new Error(`llm-pi: hand-declared route "${routeId}" must declare at least one model`)

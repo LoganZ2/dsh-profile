@@ -75,6 +75,11 @@
             transport: websocket
           deepseek: {}
 
+    # Responses over a WebSocket for an endpoint that gates it with an API key.
+    # Registers itself as api "openai-responses-ws" on the row above.
+    - id: wire-responses-ws
+      name: 'dsh-bundle-loganz2/wire-responses-ws'
+
     # --- consent gate + tools: ours, opencode-style ------------------------
     - id: permission
       name: 'dsh-bundle-loganz2/permission'
