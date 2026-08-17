@@ -58,21 +58,21 @@ const LLM_PI_NAMESPACE = settingsNamespace('llm-pi')
  */
 const CONFIG_SCHEMA = z.object({
   providers: z.dict(z.object({
-    transport: z.union(['sse', 'websocket', 'websocket-cached', 'auto'])
-      .description('A hint for wires that offer both, such as openai-codex-responses. A wire that is always a socket (openai-responses-ws) ignores it, and a wire that is always SSE rejects it.'),
-    baseURL: z.string().description('Hand-declared routes only: the endpoint. A pi-ai catalog route carries its own.'),
-    api: z.string()
-      .description('Hand-declared routes only: which wire to speak. pi-ai ships openai-completions, openai-responses, anthropic-messages, and openai-codex-responses; a mounted wire plugin adds more, such as openai-responses-ws for Responses over a WebSocket with an API key. Note openai-codex-responses drives the ChatGPT backend and authenticates only with an OAuth credential from `llm-pi-login openai-codex`.'),
-    apiKeyEnv: z.string()
-      .description('The NAME of an environment variable holding the key — not the key. To give the key directly, use apiKey below.'),
-    displayName: z.string().description('Label for selectors. The route id above is what a model selection names.'),
+    // Notes only where a field is easy to get wrong. The api dropdown already
+    // marks which wires use a socket, and a refused combination explains
+    // itself, so neither needs prose here.
+    transport: z.union(['sse', 'websocket', 'websocket-cached', 'auto']),
+    baseURL: z.string(),
+    api: z.string(),
+    apiKeyEnv: z.string().description('Variable name, not the key.'),
+    displayName: z.string().description('Label only.'),
     models: z.array(z.object({
       id: z.string().required(),
       name: z.string(),
       contextWindow: z.number(),
       maxTokens: z.number(),
       reasoning: z.boolean(),
-    })).description('Hand-declared routes only: the models this endpoint serves.'),
+    })),
   })),
 })
 
