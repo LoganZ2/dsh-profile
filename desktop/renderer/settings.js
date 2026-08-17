@@ -393,11 +393,13 @@ function renderSection(section) {
   if (statuses.get(section.ns)?.kind) status.classList.add(statuses.get(section.ns).kind)
 
   save.addEventListener('click', () => {
-    const patch = {}
+    // The form holds the whole section and writes it back whole: that is what
+    // lets a route be renamed or removed at all.
+    const next = {}
     try {
       for (const reader of controls) {
         const read = reader.read()
-        if (read !== undefined) patch[reader.key] = read
+        if (read !== undefined) next[reader.key] = read
       }
     } catch (error) {
       statuses.set(section.ns, { text: `Not valid JSON: ${error.message}`, kind: 'is-fault' })
@@ -408,7 +410,7 @@ function renderSection(section) {
     statuses.set(section.ns, { text: 'Saving…' })
     status.textContent = 'Saving…'
     status.className = 'section__status'
-    bridge.send({ type: 'settings_update', ns: section.ns, patch, revision: section.revision })
+    bridge.send({ type: 'settings_update', ns: section.ns, section: next, revision: section.revision })
   })
 
   if (controls.length === 0) {

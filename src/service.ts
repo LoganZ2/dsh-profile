@@ -194,8 +194,12 @@ export class PiLlm extends Service {
     const info = await this.resolveModelInfo(config.provider, config.model, signal)
     const efforts = info.reasoning?.efforts ?? []
     if (config.reasoningEffort !== undefined && !efforts.some(effort => effort.id === config.reasoningEffort)) {
+      // Name what would work: the caller cannot guess a model's levels.
       throw new Error(
-        `llm-pi: provider "${config.provider}" model "${config.model}" does not support reasoning effort "${config.reasoningEffort}"`,
+        `llm-pi: provider "${config.provider}" model "${config.model}" does not support reasoning effort`
+        + ` "${config.reasoningEffort}" — ${efforts.length === 0
+          ? 'this model takes none, so leave it unset'
+          : `supported: ${efforts.map(effort => effort.id).join(', ')}`}`,
       )
     }
     const maxTokens = config.maxTokens ?? info.defaultMaxTokens

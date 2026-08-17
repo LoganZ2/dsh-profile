@@ -11,11 +11,16 @@
  *
  * Client → server:
  *   {type:'settings_describe'}                      the sections and their schemas
- *   {type:'settings_update', ns, patch, revision}   write one section
+ *   {type:'settings_update', ns, section, revision}  write one section whole
  *
  * Server → client:
  *   {type:'settings', sections}                     always the full picture
  *   {type:'settings_rejected', ns, message}         the write failed; sections unchanged
+ *
+ * A write REPLACES the section rather than merging into it. The window renders
+ * a whole section and reads a whole section back, and a merge can only ever
+ * add or change keys — under one, a removed route would come back and a
+ * renamed one would exist twice.
  *
  * Writes carry the revision the client rendered. A section edited elsewhere in
  * the meantime rejects rather than silently overwriting, and the reply carries
@@ -36,7 +41,7 @@ interface SettingsDescriptor {
 
 interface SettingsRegistry {
   describe(): SettingsDescriptor[]
-  update(ns: string, patch: object, expectedRevision?: number): Promise<void>
+  replace(ns: string, section: object, expectedRevision?: number): Promise<void>
 }
 
 interface BridgeRouter {
@@ -77,18 +82,18 @@ export function apply(ctx: Context): void {
 
   ctx.effect(() => bridge.handle('settings_update', async (message, send) => {
     const ns = message['ns']
-    const patch = message['patch']
+    const section = message['section']
     if (typeof ns !== 'string' || ns.length === 0) {
       send({ type: 'error', message: 'settings_update needs a namespace' })
       return
     }
-    if (typeof patch !== 'object' || patch === null || Array.isArray(patch)) {
-      send({ type: 'error', message: 'settings_update needs an object patch' })
+    if (typeof section !== 'object' || section === null || Array.isArray(section)) {
+      send({ type: 'error', message: 'settings_update needs an object section' })
       return
     }
     const revision = typeof message['revision'] === 'number' ? message['revision'] : undefined
     try {
-      await settings.update(ns, patch as object, revision)
+      await settings.replace(ns, section as object, revision)
     } catch (error: unknown) {
       // A stale revision or a section the owner refuses is the user's problem
       // to resolve, not a transport fault: report it and repaint.
