@@ -62,7 +62,7 @@ const CONFIG_SCHEMA = z.object({
       .description('Only the openai-codex-responses wire implements WebSockets; every other api streams over SSE and ignores this.'),
     baseURL: z.string().description('Hand-declared routes only: the endpoint. A pi-ai catalog route carries its own.'),
     api: z.union(['openai-completions', 'openai-responses', 'anthropic-messages', 'openai-codex-responses'])
-      .description('Hand-declared routes only: the wire protocol to speak.'),
+      .description('Hand-declared routes only: the wire protocol to speak. openai-codex-responses is the only one with WebSockets, but it drives the ChatGPT backend and needs an OAuth credential from `llm-pi-login openai-codex` — an API key cannot use it.'),
     apiKeyEnv: z.string()
       .description('The NAME of an environment variable holding the key — not the key. To give the key directly, use apiKey below.'),
     displayName: z.string().description('Label for selectors. The route id above is what a model selection names.'),

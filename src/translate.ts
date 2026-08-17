@@ -217,6 +217,12 @@ function usageChunk(usage: PiUsage): StreamChunk {
 const UNCONFIGURED = /^Provider is not configured: (.+)$/
 
 /**
+ * The codex wire reads its credential as a JWT and wants a chatgpt_account_id
+ * claim from it, so a plain API key cannot drive it at all.
+ */
+const CODEX_TOKEN = /^(Failed to extract accountId from token|No account ID in token)$/
+
+/**
  * Say what a provider message means for this harness. A stream can fail by
  * throwing or by emitting an error event, and both arrive here so neither can
  * reach the user in a form that names no remedy.
@@ -224,6 +230,11 @@ const UNCONFIGURED = /^Provider is not configured: (.+)$/
  * @returns the message to show.
  */
 export function explainFailure(raw: string): string {
+  if (CODEX_TOKEN.test(raw)) {
+    return 'llm-pi: the openai-codex-responses wire needs a ChatGPT OAuth credential — a token carrying a'
+      + ' chatgpt_account_id claim, obtained by running `llm-pi-login openai-codex`. An API key cannot'
+      + ' drive that wire. For an OpenAI-compatible endpoint of your own, use api "openai-responses".'
+  }
   const unconfigured = UNCONFIGURED.exec(raw)
   if (unconfigured === null) return raw
   return `llm-pi: route "${unconfigured[1]}" has no API key. Set one for this route in Settings —`
