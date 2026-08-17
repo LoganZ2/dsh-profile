@@ -9,6 +9,7 @@
  *   {type:'sessions'}                     list the persisted conversations
  *   {type:'resume', sessionId}            reopen a persisted conversation
  *   {type:'session_delete', sessionId}    forget one for good, log and all
+ *   {type:'stop', sessionId?}             abort the running turn
  *   {type:'models'}                       what models the routes serve
  *   {type:'model_select', provider, model, sessionId?}   switch model
  *
@@ -55,6 +56,8 @@ export interface Config {
 
 interface AgentHandle {
   followup(message: unknown): void
+  /** Drop queued work and abort the running turn. */
+  cancel(cause: { kind: 'user' }): void
   whenIdle(): Promise<void>
   session: { id: string; events: readonly unknown[] }
 }
@@ -386,6 +389,20 @@ export function apply(ctx: Context, config: Config = {}): void {
         void handleResume(requested).catch((error: unknown) => {
           send({ type: 'error', message: error instanceof Error ? error.message : String(error) })
         })
+        return
+      }
+      case 'stop': {
+        // Whatever the client names, or the only conversation it has open.
+        const requested = typeof message['sessionId'] === 'string' ? message['sessionId'] : undefined
+        const held = requested === undefined
+          ? (agents.size === 1 ? [...agents.values()][0] : undefined)
+          : agents.get(requested)
+        if (held === undefined) {
+          send({ type: 'error', message: 'nothing running to stop' })
+          return
+        }
+        // A cancel with no active turn is a no-op, so this is safe to spam.
+        held.agent.cancel({ kind: 'user' })
         return
       }
       case 'models': {

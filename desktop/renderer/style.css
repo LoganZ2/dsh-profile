@@ -742,3 +742,15 @@ body {
 
 .composer__sill { justify-content: flex-start; gap: 14px; }
 .composer__sill .composer__send { margin-left: auto; }
+
+/* Stopping is not the same act as sending, so the button says which it is. */
+.composer__send.is-stop {
+  border-color: var(--gate);
+  color: var(--gate);
+}
+
+.composer__send.is-stop:hover:not(:disabled) { background: color-mix(in srgb, var(--gate) 12%, transparent); }
+
+/* A note carries only its own label — no body, no timestamp emphasis. */
+.entry--note { --trace: var(--rule-firm); --accent: var(--ink-dim); }
+.entry--note .node { width: 5px; height: 5px; }

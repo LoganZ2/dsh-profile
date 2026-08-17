@@ -82,17 +82,19 @@
     - id: permission
       name: 'dsh-bundle-loganz2/permission'
       config:
-        # No interactive approver in one-shot runs, so `ask` falls back to
-        # deny; everything the run should do must be allowed here.
+        # `ask` reaches whoever is holding the socket — the desktop draws it as
+        # a gate on the wire. With no approver (a headless one-shot) it falls
+        # back to deny, so an unattended run still cannot be talked into
+        # anything. The allowlist below is what runs without interrupting.
         askFallback: deny
         rules:
           read: allow
           glob: allow
           grep: allow
           edit: allow
-          external_directory: deny
+          external_directory: ask
           bash:
-            '*': deny
+            '*': ask
             'ls *': allow
             'cat *': allow
             'git status': allow

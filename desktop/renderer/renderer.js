@@ -92,7 +92,12 @@ function setPhase() {
     : connection === 'starting'
       ? 'starting'
       : pendingGates.size > 0 ? 'gated' : working ? 'working' : 'ready'
-  sendButton.disabled = state !== 'ready'
+  // While a turn runs the primary action is to end it, so the one button
+  // becomes Stop rather than sitting there disabled.
+  const stoppable = state === 'working' || state === 'gated'
+  sendButton.textContent = stoppable ? 'Stop' : 'Send'
+  sendButton.classList.toggle('is-stop', stoppable)
+  sendButton.disabled = !stoppable && state !== 'ready'
 }
 
 function addFault(text) {
@@ -102,6 +107,13 @@ function addFault(text) {
   body.className = 'text'
   body.textContent = text
   built.body.appendChild(body)
+  append(built.element)
+}
+
+/** A quiet line on the wire for something that happened but did not speak. */
+function addNote(text) {
+  closeAssistant()
+  const built = entry('note', text, Date.now())
   append(built.element)
 }
 
@@ -403,6 +415,9 @@ function onEvent(event) {
       // and nowhere else the client sees.
       const reason = event.data?.reason
       if (reason?.kind === 'error') addFault(reason.error?.message ?? 'The turn failed.')
+      // A turn you ended yourself is not a fault; it still has to be visible,
+      // or the transcript just stops mid-sentence with no reason given.
+      else if (reason?.kind === 'aborted') addNote('Stopped')
       return
     }
     case 'assistant/chunk':
@@ -477,6 +492,11 @@ function apply(message) {
 /* ---- composer -------------------------------------------------------- */
 
 function submit() {
+  // Mid-turn the button stops the agent instead of sending.
+  if (sendButton.classList.contains('is-stop')) {
+    bridge.send({ type: 'stop', ...(sessionId === undefined ? {} : { sessionId }) })
+    return
+  }
   const text = input.value.trim()
   if (text.length === 0 || sendButton.disabled) return
   input.value = ''
@@ -580,7 +600,12 @@ rackToggle.addEventListener('click', () => {
 })
 
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') collapseRack()
+  if (event.key !== 'Escape') return
+  if (rack.classList.contains('is-expanded')) {
+    collapseRack()
+    return
+  }
+  if (working) bridge.send({ type: 'stop', ...(sessionId === undefined ? {} : { sessionId }) })
 })
 
 newSession.addEventListener('click', () => {
