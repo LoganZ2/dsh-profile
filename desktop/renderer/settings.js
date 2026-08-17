@@ -440,27 +440,34 @@ function render(sections) {
  * preview page can feed it the same shapes.
  * @param message - one bridge message.
  */
+/** The last sections the harness sent, so a key change can repaint without asking again. */
+let lastSections = []
+
 function apply(message) {
   if (message.type === 'settings') {
     // A save answers with the fresh picture, so a pending "Saving…" resolves.
     for (const [ns, entry] of statuses) {
       if (entry.text === 'Saving…') statuses.set(ns, { text: 'Saved', kind: 'is-saved' })
     }
-    render(message.sections)
+    lastSections = message.sections
+    render(lastSections)
     return
   }
   if (message.type === 'provider_keys') {
+    // Repaint from what we already hold. Asking the harness again from inside
+    // its own answer is how this turned into a message storm.
     storedKeys = new Set(message.stored ?? [])
-    bridge.send({ type: 'provider_keys' })
-bridge.send({ type: 'settings_describe' })
+    render(lastSections)
     return
   }
   if (message.type === 'settings_rejected') {
     statuses.set(message.ns, { text: message.message, kind: 'is-fault' })
     return
   }
-  if (message.type === 'welcome') bridge.send({ type: 'provider_keys' })
-bridge.send({ type: 'settings_describe' })
+  if (message.type === 'welcome') {
+    bridge.send({ type: 'provider_keys' })
+    bridge.send({ type: 'settings_describe' })
+  }
 }
 
 globalThis.dshSettings = { apply }
