@@ -662,3 +662,22 @@ body {
 
 .rack.is-expanded .tab__close { position: absolute; top: 7px; right: 8px; }
 .rack.is-expanded .tab { position: relative; }
+
+/* The model sits with the composer, where the choice is about to matter. It
+   takes the paired-control height like everything else on this row. */
+.composer__model {
+  flex: 0 0 auto;
+  align-self: flex-end;
+  max-width: 24ch;
+  height: var(--field);
+  padding: 0 10px;
+  border: 1px solid var(--rule-firm);
+  border-radius: 3px;
+  background: var(--plate);
+  color: var(--ink-dim);
+  font: 11.5px/1.4 var(--mono);
+  cursor: pointer;
+}
+
+.composer__model:hover:not(:disabled) { color: var(--ink); border-color: var(--signal); }
+.composer__model:disabled { color: var(--ink-dim); cursor: default; }

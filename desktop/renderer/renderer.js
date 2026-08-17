@@ -17,6 +17,7 @@ const sendButton = document.getElementById('send')
 const rack = document.getElementById('rack')
 const rackToggle = document.getElementById('rack-toggle')
 const settingsButton = document.getElementById('settings')
+const modelSelect = document.getElementById('model')
 const sessionList = document.getElementById('session-list')
 const newSession = document.getElementById('new-session')
 
@@ -430,6 +431,10 @@ function apply(message) {
       connection = 'connected'
       setPhase()
       bridge.send({ type: 'sessions' })
+      bridge.send({ type: 'models' })
+      return
+    case 'models':
+      renderModels(message.models ?? [], message.current)
       return
     case 'session':
       sessionId = message.sessionId
@@ -476,6 +481,48 @@ function submit() {
   openAssistant()
   bridge.send({ type: 'prompt', text, ...(sessionId === undefined ? {} : { sessionId }) })
 }
+
+/* ---- model selection -------------------------------------------------- */
+
+/** The catalog as the harness reports it, and what is chosen. */
+let modelCurrent = { provider: undefined, model: undefined }
+
+function renderModels(models, current) {
+  modelCurrent = current ?? modelCurrent
+  modelSelect.textContent = ''
+  if (models.length === 0) {
+    const option = document.createElement('option')
+    option.textContent = 'no models'
+    modelSelect.appendChild(option)
+    modelSelect.disabled = true
+    return
+  }
+  modelSelect.disabled = false
+  // A selection can outlive the route that served it — a renamed or deleted
+  // one. Show it rather than letting the box display someone else's model.
+  const known = models.some(e => e.provider === modelCurrent.provider && e.id === modelCurrent.model)
+  if (!known && modelCurrent.provider !== undefined && modelCurrent.model !== undefined) {
+    const stale = document.createElement('option')
+    stale.value = `${modelCurrent.provider}\u0000${modelCurrent.model}`
+    stale.textContent = `${modelCurrent.model}  ·  ${modelCurrent.provider} (not configured)`
+    modelSelect.appendChild(stale)
+  }
+  for (const entry of models) {
+    const option = document.createElement('option')
+    option.value = `${entry.provider}\u0000${entry.id}`
+    // The route matters as much as the model: two routes can serve one id.
+    option.textContent = `${entry.id}  ·  ${entry.provider}`
+    modelSelect.appendChild(option)
+  }
+  const chosen = `${modelCurrent.provider}\u0000${modelCurrent.model}`
+  if ([...modelSelect.options].some(o => o.value === chosen)) modelSelect.value = chosen
+}
+
+modelSelect.addEventListener('change', () => {
+  const [provider, model] = modelSelect.value.split('\u0000')
+  if (provider === undefined || model === undefined) return
+  bridge.send({ type: 'model_select', provider, model, ...(sessionId === undefined ? {} : { sessionId }) })
+})
 
 /* ---- rack ------------------------------------------------------------ */
 

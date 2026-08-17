@@ -9,6 +9,8 @@
  *   {type:'sessions'}                     list the persisted conversations
  *   {type:'resume', sessionId}            reopen a persisted conversation
  *   {type:'session_delete', sessionId}    forget one for good, log and all
+ *   {type:'models'}                       what models the routes serve
+ *   {type:'model_select', provider, model, sessionId?}   switch model
  *
  * Server → client:
  *   {type:'welcome', v:1}
@@ -16,6 +18,7 @@
  *   {type:'sessions', sessions}           the picker's rows, newest first
  *   {type:'history', sessionId, events}   a resumed conversation's whole log
  *   {type:'deleted', sessionId}           that conversation is gone
+ *   {type:'models', models, current}      the catalog and the selection
  *   {type:'event', sessionId, event}      one durable session event, live
  *   {type:'idle', sessionId}              the turn settled
  *   {type:'permission_ask', id, request}  approval needed; reply by id
@@ -134,7 +137,7 @@ export class BridgeService extends Service {
 }
 
 export const name = 'bridge'
-export const inject = ['agents', 'agentDefaultModel', 'sessions', 'sessionQuery', 'permission']
+export const inject = ['agents', 'agentDefaultModel', 'sessions', 'sessionQuery', 'permission', 'llm']
 
 /**
  * Mount the socket server and drive conversations for one connected client.
@@ -154,7 +157,13 @@ export function apply(ctx: Context, config: Config = {}): void {
   new BridgeService(ctx, handlers)
 
   /** Live conversations, by session id. */
-  const agents = new Map<string, { agent: AgentHandle, dispose?: () => void }>()
+  // The selection ref travels with the agent: mutating it switches the model
+  // for the conversation already running, not only for the next one.
+  const agents = new Map<string, {
+    agent: AgentHandle
+    dispose?: () => void
+    selection: ModelSelectionRef
+  }>()
   let client: net.Socket | undefined
   let releaseResponder: (() => void) | undefined
   const pendingAsks = new Map<string, (reply: PermissionReply) => void>()
@@ -193,8 +202,8 @@ export function apply(ctx: Context, config: Config = {}): void {
       currentSelection(): { provider: string; model: string }
     }
     const selection = defaultModel.currentSelection()
+    const selected: ModelSelectionRef = { current: selection, assembled: undefined }
     const setup = (agentCtx: Context): void => {
-      const selected: ModelSelectionRef = { current: selection, assembled: undefined }
       installModelSelection(agentCtx, selected)
     }
     const agentOptions = { provider: selection.provider, model: selection.model }
@@ -210,9 +219,55 @@ export function apply(ctx: Context, config: Config = {}): void {
       })
       : await registry.resume({ resumeSessionId: SessionId(sessionId), agentOptions, setup })
 
-    agents.set(sessionId, { agent: created.agent, ...created.dispose === undefined ? {} : { dispose: created.dispose } })
+    agents.set(sessionId, {
+      agent: created.agent,
+      selection: selected,
+      ...created.dispose === undefined ? {} : { dispose: created.dispose },
+    })
     await created.agent.whenIdle()
     return { agent: created.agent, sessionId, opened: true }
+  }
+
+  /**
+   * Every model the configured routes serve, and the current selection.
+   */
+  const handleModels = async (): Promise<void> => {
+    const llm = ctx.get('llm') as {
+      listProviders(): Promise<{ id: string }[]> | { id: string }[]
+      listModels(provider: string): Promise<{ provider: string, id: string, name?: string }[]>
+    }
+    const defaultModel = ctx.get('agentDefaultModel') as {
+      currentSelection(): { provider: string, model: string }
+    }
+    const providers = await llm.listProviders()
+    const models: { provider: string, id: string, name?: string }[] = []
+    for (const provider of providers) {
+      // A route whose credential or catalog is unavailable should not take the
+      // whole list down with it.
+      const listed = await llm.listModels(provider.id).catch(() => [])
+      models.push(...listed)
+    }
+    send({ type: 'models', models, current: defaultModel.currentSelection() })
+  }
+
+  /**
+   * Switch models: the conversation in front of you, and the default that new
+   * ones start from, so the choice does not silently revert.
+   * @param provider - the route to use.
+   * @param model - the model id on that route.
+   * @param sessionId - the conversation to switch, when one is open.
+   */
+  const handleModelSelect = async (provider: string, model: string, sessionId?: string): Promise<void> => {
+    const defaultModel = ctx.get('agentDefaultModel') as {
+      saveSelection(next: { provider: string, model: string }): Promise<void>
+    }
+    const held = sessionId === undefined ? undefined : agents.get(sessionId)
+    if (held !== undefined) {
+      held.selection.current = { provider, model }
+      held.selection.assembled = undefined
+    }
+    await defaultModel.saveSelection({ provider, model })
+    await handleModels()
   }
 
   /**
@@ -326,6 +381,25 @@ export function apply(ctx: Context, config: Config = {}): void {
           return
         }
         void handleResume(requested).catch((error: unknown) => {
+          send({ type: 'error', message: error instanceof Error ? error.message : String(error) })
+        })
+        return
+      }
+      case 'models': {
+        void handleModels().catch((error: unknown) => {
+          send({ type: 'error', message: error instanceof Error ? error.message : String(error) })
+        })
+        return
+      }
+      case 'model_select': {
+        const provider = message['provider']
+        const model = message['model']
+        if (typeof provider !== 'string' || typeof model !== 'string' || provider === '' || model === '') {
+          send({ type: 'error', message: 'model_select needs provider and model' })
+          return
+        }
+        const scope = typeof message['sessionId'] === 'string' ? message['sessionId'] : undefined
+        void handleModelSelect(provider, model, scope).catch((error: unknown) => {
           send({ type: 'error', message: error instanceof Error ? error.message : String(error) })
         })
         return
