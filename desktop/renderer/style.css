@@ -21,6 +21,7 @@
   --mono: "SF Mono", "Menlo", ui-monospace, monospace;
 
   --rail: 46px;
+  --field: 46px;
   color-scheme: light;
 }
 
@@ -487,8 +488,12 @@ body {
   background: linear-gradient(transparent, var(--shade));
 }
 
+/* One line of text plus padding and borders: 24 + 20 + 2. Both controls sit at
+   this height until the input grows, and the button holds it as the input
+   stretches past it. */
 .composer__input {
   flex: 1;
+  min-height: var(--field);
   max-height: 200px;
   padding: 10px 13px;
   border: 1px solid var(--rule-firm);
@@ -496,13 +501,17 @@ body {
   background: var(--plate);
   color: inherit;
   font: inherit;
+  line-height: 24px;
   resize: none;
 }
 
 .composer__input::placeholder { color: var(--ink-dim); }
 
 .composer__send {
-  padding: 11px 19px;
+  display: flex;
+  align-items: center;
+  height: var(--field);
+  padding: 0 19px;
   border: 1px solid var(--signal);
   border-radius: 3px;
   background: transparent;
