@@ -29,11 +29,15 @@
     </section>
   </main>
 
-  <form class="composer" id="composer">
-    <select id="model" class="composer__model" title="Model for this conversation"></select>
-    <textarea id="input" class="composer__input" rows="1" placeholder="Type a prompt" spellcheck="false"></textarea>
-    <button type="submit" id="send" class="composer__send">Send</button>
-  </form>
+  <div class="dock">
+    <form class="composer" id="composer">
+      <textarea id="input" class="composer__input" rows="1" placeholder="Type a prompt" spellcheck="false"></textarea>
+      <div class="composer__sill">
+        <select id="model" class="composer__model" title="Model for this conversation"></select>
+        <button type="submit" id="send" class="composer__send">Send</button>
+      </div>
+    </form>
+  </div>
 
   <script src="renderer.js"></script>
 </body>

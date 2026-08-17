@@ -560,12 +560,9 @@ composer.addEventListener('submit', (event) => {
   submit()
 })
 
-/** Borders, which `scrollHeight` omits but a border-box height must include. */
-const inputBorder = input.offsetHeight - input.clientHeight
-
 input.addEventListener('input', () => {
   input.style.height = 'auto'
-  input.style.height = `${input.scrollHeight + inputBorder}px`
+  input.style.height = `${input.scrollHeight}px`
 })
 
 input.addEventListener('keydown', (event) => {

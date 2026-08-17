@@ -552,46 +552,75 @@ body {
   color: var(--ink-dim);
 }
 
-/* ---- composer ------------------------------------------------------- */
+/* ---- composer -------------------------------------------------------- */
 
-.composer {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  padding: 12px 24px 14px;
+/* One recessed plate, with its controls on the sill inside it. The input is
+   the whole point, so it carries no chrome of its own and the plate takes the
+   border — including the focus ring, which belongs to the thing as a whole. */
+.dock {
+  padding: 12px 24px 16px;
   border-top: 1px solid var(--rule-firm);
   background: linear-gradient(transparent, var(--shade));
 }
 
-/* One line of text plus padding and borders: 24 + 20 + 2. Both controls sit at
-   this height until the input grows, and the button holds it as the input
-   stretches past it. */
-.composer__input {
-  flex: 1;
-  min-height: var(--field);
-  max-height: 200px;
-  padding: 10px 13px;
+.composer {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px 9px;
   border: 1px solid var(--rule-firm);
-  border-radius: 3px;
+  border-radius: 4px;
   background: var(--plate);
+}
+
+.composer:focus-within { border-color: var(--signal); }
+
+.composer__input {
+  min-height: 24px;
+  max-height: 220px;
+  padding: 0;
+  border: none;
+  background: transparent;
   color: inherit;
   font: inherit;
   line-height: 24px;
   resize: none;
 }
 
+.composer__input:focus { outline: none; }
 .composer__input::placeholder { color: var(--ink-dim); }
 
-.composer__send {
+.composer__sill {
   display: flex;
   align-items: center;
-  height: var(--field);
-  padding: 0 19px;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+/* Quiet: it names a fact about the next send, it is not an action. */
+.composer__model {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 34ch;
+  padding: 2px 4px 2px 0;
+  border: none;
+  background: transparent;
+  color: var(--ink-dim);
+  font: 11px/1.4 var(--mono);
+  cursor: pointer;
+}
+
+.composer__model:hover:not(:disabled) { color: var(--signal); }
+.composer__model:disabled { cursor: default; }
+
+.composer__send {
+  flex: 0 0 auto;
+  padding: 6px 15px;
   border: 1px solid var(--signal);
   border-radius: 3px;
   background: transparent;
   color: var(--signal);
-  font: 500 11px/1 var(--display);
+  font: 500 10px/1.3 var(--display);
   letter-spacing: 0.16em;
   text-transform: uppercase;
   cursor: pointer;
@@ -663,21 +692,3 @@ body {
 .rack.is-expanded .tab__close { position: absolute; top: 7px; right: 8px; }
 .rack.is-expanded .tab { position: relative; }
 
-/* The model sits with the composer, where the choice is about to matter. It
-   takes the paired-control height like everything else on this row. */
-.composer__model {
-  flex: 0 0 auto;
-  align-self: flex-end;
-  max-width: 24ch;
-  height: var(--field);
-  padding: 0 10px;
-  border: 1px solid var(--rule-firm);
-  border-radius: 3px;
-  background: var(--plate);
-  color: var(--ink-dim);
-  font: 11.5px/1.4 var(--mono);
-  cursor: pointer;
-}
-
-.composer__model:hover:not(:disabled) { color: var(--ink); border-color: var(--signal); }
-.composer__model:disabled { color: var(--ink-dim); cursor: default; }
