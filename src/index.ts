@@ -118,4 +118,27 @@ export function apply(ctx: Context, config: Config = {}): void {
       }
     },
   } as never)
+
+  // Keys are not settings: they never round-trip through a config file, so the
+  // desktop asks for them on their own messages. Optional by injection, since
+  // only the bridge row provides a client to ask.
+  ctx.inject(['bridge'], (bctx: Context) => {
+    const bridge = bctx.get('bridge') as {
+      handle(type: string, handler: (message: Record<string, unknown>, send: (out: Record<string, unknown>) => void) => void | Promise<void>): () => void
+    }
+    const report = async (send: (out: Record<string, unknown>) => void): Promise<void> => {
+      send({ type: 'provider_keys', stored: await llm.storedKeys() })
+    }
+    bctx.effect(() => bridge.handle('provider_keys', async (_message, send) => report(send)), 'llm-pi: report stored keys')
+    bctx.effect(() => bridge.handle('provider_key_set', async (message, send) => {
+      const routeId = message['route']
+      if (typeof routeId !== 'string' || routeId.length === 0) {
+        send({ type: 'error', message: 'provider_key_set needs a route' })
+        return
+      }
+      const key = message['key']
+      await llm.setApiKey(routeId, typeof key === 'string' && key.length > 0 ? key : undefined)
+      await report(send)
+    }), 'llm-pi: store a route key')
+  })
 }

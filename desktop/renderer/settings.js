@@ -14,6 +14,9 @@ const bridge = globalThis.dsh ?? { send() {}, onMessage() {} }
 /** Status lines survive a repaint so a save result is still readable after it. */
 const statuses = new Map()
 
+/** Route ids the harness holds a credential for. Whether, never what. */
+let storedKeys = new Set()
+
 /**
  * Resolve one schemastery ref into its node.
  * @param schema - the serialized {uid, refs} graph.
@@ -118,12 +121,12 @@ function mini(label, onClick) {
  * @param into - the element to append to.
  * @returns the field's key and a `read()` for its edited value.
  */
-function renderField(schema, key, ref, value, into) {
+function renderField(schema, key, ref, value, into, secrets = false) {
   if (ref.type === 'dict' || ref.type === 'array') {
     const caption = document.createElement('div')
     caption.className = 'dict__caption'
     caption.textContent = key
-    const widget = ref.type === 'dict' ? dictField(schema, ref, value) : arrayField(schema, ref, value)
+    const widget = ref.type === 'dict' ? dictField(schema, ref, value, secrets) : arrayField(schema, ref, value)
     into.append(caption, widget)
     return { key, read: () => widget.read() }
   }
@@ -165,6 +168,39 @@ function objectFields(schema, objectRef, value, into) {
     }
     return out
   }
+}
+
+/**
+ * A route's API key. It is written straight to the harness's credential file
+ * and never sent back, so this shows only whether one is on file and offers to
+ * replace or forget it.
+ * @param routeId - the route the key belongs to.
+ * @returns the row.
+ */
+function keyRow(routeId) {
+  const row = document.createElement('div')
+  row.className = 'field'
+  const label = document.createElement('label')
+  label.className = 'field__label'
+  label.textContent = 'apiKey'
+  const box = document.createElement('div')
+  box.className = 'key'
+  const input = document.createElement('input')
+  input.className = 'field__input'
+  input.type = 'password'
+  input.autocomplete = 'off'
+  input.placeholder = storedKeys.has(routeId) ? 'stored — type to replace' : 'paste the key'
+  const save = mini('Set', () => {
+    if (input.value.length === 0) return
+    bridge.send({ type: 'provider_key_set', route: routeId, key: input.value })
+    input.value = ''
+  })
+  const forget = mini('Forget', () => {
+    bridge.send({ type: 'provider_key_set', route: routeId })
+  })
+  box.append(input, save, forget)
+  row.append(label, box)
+  return row
 }
 
 /** What to call one item of a list: its own identity if it has one. */
@@ -248,12 +284,13 @@ function arrayField(schema, arrayRef, value) {
  * @param value - the current entries.
  * @returns an element carrying a `read()` returning the edited dictionary.
  */
-function dictField(schema, dictRef, value) {
+function dictField(schema, dictRef, value, secrets = false) {
   const wrapper = document.createElement('div')
   wrapper.className = 'dict'
   const inner = node(schema, dictRef.inner) ?? {}
   const entries = new Map(Object.entries(value ?? {}))
   let readers = new Map()
+  let names = new Map()
 
   const keep = () => {
     for (const [existing, read] of readers) entries.set(existing, read())
@@ -262,21 +299,30 @@ function dictField(schema, dictRef, value) {
   const paint = () => {
     wrapper.textContent = ''
     readers = new Map()
+    names = new Map()
     for (const [key, entryValue] of entries) {
       const card = document.createElement('div')
       card.className = 'route'
       const head = document.createElement('div')
       head.className = 'route__head'
-      const label = document.createElement('span')
-      label.className = 'route__name'
-      label.textContent = key
+      // The id is the route's identity — the thing a model selection names —
+      // so it has to be editable here, not only at the moment of adding.
+      const label = document.createElement('input')
+      label.className = 'field__input route__name'
+      label.type = 'text'
+      label.value = key
+      label.spellcheck = false
+      label.title = 'Route id — what a model selection names'
       head.append(label, mini('Remove', () => {
         keep()
         entries.delete(key)
         paint()
       }))
       card.appendChild(head)
-      readers.set(key, objectFields(schema, inner, entryValue, card))
+      const read = objectFields(schema, inner, entryValue, card)
+      if (secrets) card.appendChild(keyRow(key))
+      readers.set(key, () => read())
+      names.set(key, label)
       wrapper.appendChild(card)
     }
 
@@ -303,7 +349,10 @@ function dictField(schema, dictRef, value) {
   paint()
   wrapper.read = () => {
     const out = {}
-    for (const [key, read] of readers) out[key] = read()
+    for (const [key, read] of readers) {
+      const renamed = names.get(key)?.value.trim()
+      out[renamed !== undefined && renamed.length > 0 ? renamed : key] = read()
+    }
     return out
   }
   return wrapper
@@ -327,7 +376,9 @@ function renderSection(section) {
 
   const controls = []
   for (const field of fields(section.schema)) {
-    controls.push(renderField(section.schema, field.key, field.node, value[field.key], element))
+    // Only the LLM layer's route table carries credentials.
+    const secrets = section.ns === 'llm-pi' && field.key === 'providers'
+    controls.push(renderField(section.schema, field.key, field.node, value[field.key], element, secrets))
   }
 
   const foot = document.createElement('div')
@@ -398,13 +449,21 @@ function apply(message) {
     render(message.sections)
     return
   }
+  if (message.type === 'provider_keys') {
+    storedKeys = new Set(message.stored ?? [])
+    bridge.send({ type: 'provider_keys' })
+bridge.send({ type: 'settings_describe' })
+    return
+  }
   if (message.type === 'settings_rejected') {
     statuses.set(message.ns, { text: message.message, kind: 'is-fault' })
     return
   }
-  if (message.type === 'welcome') bridge.send({ type: 'settings_describe' })
+  if (message.type === 'welcome') bridge.send({ type: 'provider_keys' })
+bridge.send({ type: 'settings_describe' })
 }
 
 globalThis.dshSettings = { apply }
 bridge.onMessage(apply)
+bridge.send({ type: 'provider_keys' })
 bridge.send({ type: 'settings_describe' })

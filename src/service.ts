@@ -65,13 +65,15 @@ function capitalized(level: string): string {
 
 export class PiLlm extends Service {
   private readonly models: MutableModels
+  private readonly credentials: FileCredentialStore
   private routes: ReadonlyMap<string, RouteConfig> = new Map()
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'llm')
     const homePath = ctx.get('dshHomePath') as ((...segments: string[]) => string) | undefined
     const authPath = homePath === undefined ? fallbackAuthPath() : homePath('pi-ai', 'auth.json')
-    this.models = createModels({ credentials: new FileCredentialStore(authPath) })
+    this.credentials = new FileCredentialStore(authPath)
+    this.models = createModels({ credentials: this.credentials })
     this.configure(config)
   }
 
@@ -98,6 +100,29 @@ export class PiLlm extends Service {
     if (routes.size === 0) {
       this.ctx.logger.warn('llm-pi: no providers configured; every request will fail until config.providers names at least one route')
     }
+  }
+
+  /**
+   * Store one route's API key in the credential file, never in settings: it
+   * is written 0600 beside the OAuth tokens, and `declaredAuth` prefers it
+   * over any environment variable the route names.
+   * @param routeId - the route the key belongs to.
+   * @param key - the key, or undefined to forget the stored one.
+   */
+  async setApiKey(routeId: string, key: string | undefined): Promise<void> {
+    if (key === undefined || key.length === 0) {
+      await this.credentials.delete(routeId)
+      return
+    }
+    await this.credentials.modify(routeId, async () => ({ type: 'api_key', key }))
+  }
+
+  /**
+   * Which routes hold a stored credential. Only ever whether, never what.
+   * @returns the route ids with a credential on file.
+   */
+  async storedKeys(): Promise<string[]> {
+    return (await this.credentials.list()).map(entry => entry.providerId)
   }
 
   private attachments(): AttachmentReader | undefined {
