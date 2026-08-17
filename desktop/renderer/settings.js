@@ -31,9 +31,37 @@ function fields(schema) {
   return Object.entries(root.dict).map(([key, id]) => ({ key, node: node(schema, id) ?? {} }))
 }
 
-function control(field, current) {
-  const type = field.node.type
-  if (type === 'boolean') {
+/** The literal choices of a union-of-consts, or undefined when it is not one. */
+function choices(schema, ref) {
+  const list = ref?.list
+  if (!Array.isArray(list)) return undefined
+  const values = list.map(id => node(schema, id)).filter(n => n?.type === 'const').map(n => n.value)
+  return values.length === list.length && values.length > 0 ? values : undefined
+}
+
+/**
+ * One editable control for a leaf field.
+ * @param schema - the graph the node belongs to.
+ * @param ref - the field's schema node.
+ * @param current - its current value.
+ * @returns an element carrying a `read()` that returns the edited value.
+ */
+function control(schema, ref, current) {
+  const options = choices(schema, ref)
+  if (options !== undefined) {
+    const select = document.createElement('select')
+    select.className = 'field__input'
+    for (const value of ['', ...options]) {
+      const option = document.createElement('option')
+      option.value = value
+      option.textContent = value === '' ? '—' : value
+      select.appendChild(option)
+    }
+    select.value = current ?? ''
+    select.read = () => (select.value === '' ? undefined : select.value)
+    return select
+  }
+  if (ref?.type === 'boolean') {
     const input = document.createElement('input')
     input.className = 'field__input'
     input.type = 'checkbox'
@@ -41,7 +69,7 @@ function control(field, current) {
     input.read = () => input.checked
     return input
   }
-  if (type === 'number') {
+  if (ref?.type === 'number') {
     const input = document.createElement('input')
     input.className = 'field__input'
     input.type = 'number'
@@ -49,7 +77,7 @@ function control(field, current) {
     input.read = () => (input.value.trim() === '' ? undefined : Number(input.value))
     return input
   }
-  if (type === 'string') {
+  if (ref?.type === 'string') {
     const input = document.createElement('input')
     input.className = 'field__input'
     input.type = 'text'
@@ -61,11 +89,122 @@ function control(field, current) {
   const area = document.createElement('textarea')
   area.className = 'field__input'
   area.value = current === undefined ? '' : JSON.stringify(current, null, 2)
-  area.read = () => {
-    if (area.value.trim() === '') return undefined
-    return JSON.parse(area.value)
-  }
+  area.read = () => (area.value.trim() === '' ? undefined : JSON.parse(area.value))
   return area
+}
+
+/**
+ * Lay one object's fields into a container.
+ * @param schema - the graph.
+ * @param objectRef - an object node with a `dict` of fields.
+ * @param value - the object's current value.
+ * @param into - the element to append rows to.
+ * @returns a `read()` returning the edited object.
+ */
+function objectFields(schema, objectRef, value, into) {
+  const controls = []
+  for (const [key, id] of Object.entries(objectRef?.dict ?? {})) {
+    const ref = node(schema, id) ?? {}
+    const row = document.createElement('div')
+    row.className = 'field'
+    const label = document.createElement('label')
+    label.className = ref.meta?.required === true ? 'field__label is-required' : 'field__label'
+    label.textContent = key
+    const input = control(schema, ref, (value ?? {})[key])
+    row.append(label, input)
+    into.appendChild(row)
+    if (typeof ref.meta?.description === 'string') {
+      const note = document.createElement('p')
+      note.className = 'field__note'
+      note.textContent = ref.meta.description
+      into.appendChild(note)
+    }
+    controls.push({ key, input })
+  }
+  return () => {
+    const out = {}
+    for (const { key, input } of controls) {
+      const read = input.read()
+      if (read !== undefined) out[key] = read
+    }
+    return out
+  }
+}
+
+/**
+ * A dictionary field — an open set of named entries, each shaped by one inner
+ * schema. Provider routes are the reason this exists: the names are the user's
+ * and only the shape of each entry is fixed.
+ * @param schema - the graph.
+ * @param dictRef - the dict node.
+ * @param value - the current entries.
+ * @returns an element carrying a `read()` returning the edited dictionary.
+ */
+function dictField(schema, dictRef, value) {
+  const wrapper = document.createElement('div')
+  wrapper.className = 'dict'
+  const inner = node(schema, dictRef.inner) ?? {}
+  const entries = new Map(Object.entries(value ?? {}))
+  let readers = new Map()
+
+  const paint = () => {
+    wrapper.textContent = ''
+    readers = new Map()
+    for (const [key, entryValue] of entries) {
+      const card = document.createElement('div')
+      card.className = 'route'
+      const head = document.createElement('div')
+      head.className = 'route__head'
+      const label = document.createElement('span')
+      label.className = 'route__name'
+      label.textContent = key
+      const remove = document.createElement('button')
+      remove.type = 'button'
+      remove.className = 'route__remove'
+      remove.textContent = 'Remove'
+      remove.addEventListener('click', () => {
+        entries.delete(key)
+        paint()
+      })
+      head.append(label, remove)
+      card.appendChild(head)
+      readers.set(key, objectFields(schema, inner, entryValue, card))
+      wrapper.appendChild(card)
+    }
+
+    const add = document.createElement('div')
+    add.className = 'dict__add'
+    const name = document.createElement('input')
+    name.className = 'field__input'
+    name.type = 'text'
+    name.placeholder = 'route name'
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'route__remove'
+    button.textContent = 'Add'
+    const submit = () => {
+      const key = name.value.trim()
+      if (key === '' || entries.has(key)) return
+      // Keep what is already typed in the other entries.
+      for (const [existing, read] of readers) entries.set(existing, read())
+      entries.set(key, {})
+      paint()
+    }
+    button.addEventListener('click', submit)
+    name.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') { event.preventDefault(); submit() }
+    })
+    add.append(name, button)
+    wrapper.appendChild(add)
+  }
+
+  paint()
+  wrapper.read = () => {
+    const out = {}
+    for (const [key, read] of readers) out[key] = read()
+    return out
+  }
+  return wrapper
 }
 
 function renderSection(section) {
@@ -87,12 +226,22 @@ function renderSection(section) {
   const controls = []
   const list = fields(section.schema)
   for (const field of list) {
+    // A dictionary owns its own layout: it is a list of named cards, not one
+    // labelled control on a row.
+    if (field.node.type === 'dict') {
+      const caption = document.createElement('div')
+      caption.className = 'dict__caption'
+      caption.textContent = field.key
+      element.append(caption, dictField(section.schema, field.node, value[field.key]))
+      controls.push({ key: field.key, input: element.lastElementChild })
+      continue
+    }
     const row = document.createElement('div')
     row.className = 'field'
     const label = document.createElement('label')
     label.className = field.node.meta?.required === true ? 'field__label is-required' : 'field__label'
     label.textContent = field.key
-    const input = control(field, value[field.key])
+    const input = control(section.schema, field.node, value[field.key])
     label.htmlFor = `${section.ns}-${field.key}`
     input.id = label.htmlFor
     row.append(label, input)

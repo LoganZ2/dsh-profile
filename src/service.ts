@@ -65,22 +65,33 @@ function capitalized(level: string): string {
 
 export class PiLlm extends Service {
   private readonly models: MutableModels
-  private readonly routes: ReadonlyMap<string, RouteConfig>
+  private routes: ReadonlyMap<string, RouteConfig> = new Map()
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'llm')
     const homePath = ctx.get('dshHomePath') as ((...segments: string[]) => string) | undefined
     const authPath = homePath === undefined ? fallbackAuthPath() : homePath('pi-ai', 'auth.json')
     this.models = createModels({ credentials: new FileCredentialStore(authPath) })
+    this.configure(config)
+  }
+
+  /**
+   * Replace the whole route table. Safe to call after mounting: providers are
+   * a registry the next request reads, and a stream already in flight holds
+   * the provider it resolved, so it finishes under the routes it started on.
+   * @param config - the routes this layer should serve from now on.
+   */
+  configure(config: Config): void {
     const catalog = catalogById()
     const routes = new Map<string, RouteConfig>()
+    this.models.clearProviders()
     for (const [routeId, route] of Object.entries(config.providers ?? {})) {
       this.models.setProvider(buildProvider(routeId, route, catalog))
       routes.set(routeId, route)
     }
     this.routes = routes
     if (routes.size === 0) {
-      ctx.logger.warn('llm-pi: no providers configured; every request will fail until config.providers names at least one route')
+      this.ctx.logger.warn('llm-pi: no providers configured; every request will fail until config.providers names at least one route')
     }
   }
 

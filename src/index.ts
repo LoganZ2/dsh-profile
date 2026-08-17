@@ -19,6 +19,8 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
+import z from '@deepseek-ai/schemastery'
 import { PiLlm } from './service.ts'
 import type { Config } from './providers.ts'
 
@@ -43,11 +45,51 @@ export const name = 'llm-pi'
 /** Nothing to wait for: this layer only provides. */
 export const inject: string[] = []
 
+/** Settings namespace carrying the editable route table. */
+const LLM_PI_NAMESPACE = settingsNamespace('llm-pi')
+
+/**
+ * The route table, as a settings section. A route's shape is open by design —
+ * `deepseek: {}` names a route in pi-ai's own catalog and needs nothing else,
+ * while a hand-declared route brings its endpoint, wire protocol, key
+ * variable, and model list — so the section is a dictionary of routes rather
+ * than a fixed set of fields.
+ */
+const CONFIG_SCHEMA = z.object({
+  providers: z.dict(z.object({
+    transport: z.union(['sse', 'websocket', 'websocket-cached', 'auto']),
+    baseURL: z.string(),
+    api: z.union(['openai-completions', 'openai-responses', 'anthropic-messages', 'openai-codex-responses']),
+    apiKeyEnv: z.string(),
+    displayName: z.string(),
+    models: z.array(z.object({
+      id: z.string().required(),
+      name: z.string(),
+      contextWindow: z.number(),
+      maxTokens: z.number(),
+      reasoning: z.boolean(),
+    })),
+  })),
+})
+
 /**
  * Claim `ctx.llm` with the pi-ai-native service.
+ *
+ * The profile row stays the base layer: settings resolve on top of it, so an
+ * edit that is cleared falls back to the pick-list rather than to nothing.
+ * Route changes rebuild the catalog in place, which is why the section
+ * reports as live — no restart, and no reload of this plugin.
+ *
  * @param ctx - the context this plugin was mounted into.
  * @param config - provider routes from the profile's YAML row.
  */
 export function apply(ctx: Context, config: Config = {}): void {
-  new PiLlm(ctx, config)
+  const llm = new PiLlm(ctx, config)
+  // Optional by construction: installSettingsSection injects `settings`
+  // itself, so this layer still mounts in a profile without that row.
+  let read: () => Config = () => config
+  installSettingsSection(ctx, LLM_PI_NAMESPACE, CONFIG_SCHEMA as never, config as never, {
+    setSource: (current: () => Config) => { read = current },
+    onChange: () => { llm.configure(read()) },
+  } as never)
 }
