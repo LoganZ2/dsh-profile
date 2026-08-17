@@ -9,6 +9,8 @@
  * preload feeds it, and a preview page can feed it the same shapes.
  */
 
+const { renderMarkdown } = globalThis.dshMarkdown
+
 const transcript = document.getElementById('transcript')
 const blank = document.getElementById('blank')
 const composer = document.getElementById('composer')
@@ -154,9 +156,9 @@ function paint() {
   const pinned = atBottom()
   assistant.reason.textContent = ordered.filter(b => b.kind === 'reasoning').map(b => b.text).join('\n').trim()
   assistant.reason.hidden = assistant.reason.textContent.length === 0
-  assistant.text.textContent = ordered.filter(b => b.kind === 'text').map(b => b.text).join('')
+  renderMarkdown(ordered.filter(b => b.kind === 'text').map(b => b.text).join(''), assistant.text)
   // The placeholder stands only until the model actually says something.
-  assistant.waiting.hidden = assistant.text.textContent.length > 0 || !assistant.reason.hidden
+  assistant.waiting.hidden = assistant.text.childNodes.length > 0 || !assistant.reason.hidden
   if (pinned) transcript.scrollTop = transcript.scrollHeight
 }
 
@@ -170,7 +172,7 @@ function accumulate(index, kind, text, time) {
 
 function closeAssistant() {
   assistant?.element.classList.remove('is-live')
-  if (assistant !== undefined && assistant.text.textContent.length === 0 && assistant.reason.hidden) {
+  if (assistant !== undefined && assistant.text.childNodes.length === 0 && assistant.reason.hidden) {
     assistant.element.remove()
   }
   assistant = undefined
