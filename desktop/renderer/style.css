@@ -47,7 +47,6 @@ body {
   margin: 0;
   height: 100vh;
   display: grid;
-  grid-template-columns: 228px minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
   background: var(--panel);
   color: var(--ink);
@@ -55,189 +54,202 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ---- faceplate ------------------------------------------------------ */
+/* ---- rack: every conversation, along the top ------------------------ */
 
-.faceplate {
-  grid-column: 1 / -1;
+/* Collapsed it reads as a tab strip: the current conversation is the tab whose
+   face matches the panel below, so it merges with the transcript it shows.
+   Expanded, the same buttons relax into cards — one render path, two
+   densities. */
+.rack {
   -webkit-app-region: drag;
   display: flex;
-  align-items: center;
-  gap: 18px;
-  padding: 0 18px 0 84px;
-  height: 52px;
+  align-items: flex-start;
+  padding-left: 84px;
   border-bottom: 1px solid var(--rule-firm);
-  background: linear-gradient(var(--shade), transparent);
-}
-
-.mark {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font: 600 15px/1 var(--display);
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-}
-
-.mark__bar {
-  width: 3px;
-  height: 14px;
-  background: var(--signal);
-}
-
-.plates {
-  display: flex;
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.plate {
-  display: flex;
-  align-items: baseline;
-  gap: 7px;
-  padding: 3px 9px;
-  min-width: 0;
-  border: 1px solid var(--rule);
-  border-radius: 2px;
-  background: var(--plate);
-}
-
-.plate__label {
-  font: 10px/1 var(--display);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink-dim);
-  white-space: nowrap;
-}
-
-.plate__value {
-  font: 11px/1.3 var(--mono);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.lamp {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-}
-
-.lamp__bulb {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--ink-dim);
-  box-shadow: 0 0 0 3px transparent;
-}
-
-.lamp__text {
-  font: 10px/1 var(--display);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink-dim);
-}
-
-.lamp[data-state="ready"] .lamp__bulb,
-.lamp[data-state="working"] .lamp__bulb { background: var(--signal); }
-.lamp[data-state="working"] .lamp__bulb { animation: breathe 1.6s ease-in-out infinite; }
-.lamp[data-state="gated"] .lamp__bulb { background: var(--gate); }
-.lamp[data-state="gated"] .lamp__text { color: var(--gate); }
-
-@keyframes breathe {
-  50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 26%, transparent); }
-}
-
-/* ---- session picker -------------------------------------------------- */
-
-.sessions {
-  grid-row: 2 / span 2;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  border-right: 1px solid var(--rule-firm);
   background: var(--shade);
 }
 
-.sessions__head {
+.rack__strip {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: stretch;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.rack__strip::-webkit-scrollbar { display: none; }
+
+/* The list is a handle for the renderer, not a layout box: its tabs lay out as
+   direct children of the strip, beside the new-conversation button. */
+.rack__list { display: contents; }
+
+.tab {
+  -webkit-app-region: no-drag;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 13px 14px 9px;
-}
-
-.sessions__label {
-  font: 500 10px/1 var(--display);
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--ink-dim);
-}
-
-.sessions__new {
-  padding: 3px 9px;
-  border: 1px solid var(--rule-firm);
-  border-radius: 2px;
+  gap: 8px;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 22ch;
+  height: 38px;
+  margin-bottom: -1px;
+  padding: 0 13px;
+  border: 1px solid transparent;
+  border-radius: 5px 5px 0 0;
   background: transparent;
   color: var(--ink-dim);
-  font: 500 10px/1.3 var(--display);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-
-.sessions__new:hover { border-color: var(--signal); color: var(--signal); }
-
-.sessions__list {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding-bottom: 12px;
-}
-
-.slot {
-  display: block;
-  width: 100%;
-  padding: 8px 14px 8px 11px;
-  border: none;
-  border-left: 3px solid transparent;
-  background: transparent;
-  color: inherit;
   font: inherit;
+  font-size: 13.5px;
   text-align: left;
   cursor: pointer;
 }
 
-.slot:hover { background: var(--shade); }
-.slot.is-current { border-left-color: var(--signal); background: var(--shade); }
+.tab + .tab { box-shadow: inset 1px 0 var(--rule); }
 
-.slot__title {
-  display: block;
-  font-size: 13.5px;
-  line-height: 1.35;
+.tab:hover { background: color-mix(in srgb, var(--panel) 55%, transparent); }
+
+.tab.is-current {
+  border-color: var(--rule-firm);
+  border-bottom-color: var(--panel);
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.tab__title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.slot.is-untitled .slot__title { color: var(--ink-dim); font-style: italic; }
+.tab.is-untitled .tab__title { font-style: italic; }
 
-.slot__meta {
-  display: block;
-  margin-top: 1px;
-  font: 10.5px/1.4 var(--mono);
+.tab__meta {
+  flex: 0 0 auto;
+  font: 10.5px/1 var(--mono);
   color: var(--ink-dim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  opacity: 0.8;
 }
 
-.sessions__empty {
-  padding: 4px 14px;
+/* Only the expanded card has room for the working directory. */
+.tab__detail { display: none; }
+
+.rack__empty {
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  height: 38px;
   color: var(--ink-dim);
   font-size: 13px;
 }
+
+.rack__new {
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  align-self: center;
+  margin: 0 6px;
+  padding: 5px 9px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ink-dim);
+  cursor: pointer;
+}
+
+.rack__new:hover { border-color: var(--signal); color: var(--signal); }
+
+.rack__plus { font: 15px/1 var(--display); }
+
+.rack__newlabel {
+  display: none;
+  font: 500 10px/1.3 var(--display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.rack__toggle {
+  -webkit-app-region: no-drag;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.rack__chevron {
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid var(--ink-dim);
+  border-bottom: 1.5px solid var(--ink-dim);
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 0.18s ease;
+}
+
+.rack__toggle:hover .rack__chevron { border-color: var(--signal); }
+
+/* ---- rack, expanded -------------------------------------------------- */
+
+.rack.is-expanded .rack__strip {
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 6px;
+  padding: 10px 0 12px;
+  max-height: 46vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.rack.is-expanded .tab {
+  flex: 0 0 auto;
+  width: 244px;
+  max-width: none;
+  height: auto;
+  margin-bottom: 0;
+  padding: 9px 11px;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 3px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--plate);
+  box-shadow: none;
+}
+
+.rack.is-expanded .tab.is-current { border-color: var(--signal); }
+
+.rack.is-expanded .tab__title { white-space: normal; font-size: 14px; }
+.rack.is-expanded .tab__detail { display: block; }
+
+.rack.is-expanded .tab__meta,
+.rack.is-expanded .tab__detail {
+  font: 10.5px/1.45 var(--mono);
+  color: var(--ink-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.rack.is-expanded .rack__new {
+  align-self: flex-start;
+  width: 244px;
+  height: 100%;
+  min-height: 62px;
+  margin: 0;
+  justify-content: center;
+  border: 1px dashed var(--rule-firm);
+}
+
+.rack.is-expanded .rack__newlabel { display: block; }
+.rack.is-expanded .rack__chevron { transform: translateY(2px) rotate(225deg); }
 
 /* ---- transcript ----------------------------------------------------- */
 
@@ -532,6 +544,6 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .animate-in,
-  .entry.is-live .rail::before,
-  .lamp[data-state="working"] .lamp__bulb { animation: none; }
+  .entry.is-live .rail::before { animation: none; }
+  .rack__chevron { transition: none; }
 }

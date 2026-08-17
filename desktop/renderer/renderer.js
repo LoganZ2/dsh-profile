@@ -14,11 +14,8 @@ const blank = document.getElementById('blank')
 const composer = document.getElementById('composer')
 const input = document.getElementById('input')
 const sendButton = document.getElementById('send')
-const lamp = document.getElementById('lamp')
-const lampText = document.getElementById('lamp-text')
-const plateProfile = document.getElementById('plate-profile')
-const plateModel = document.getElementById('plate-model')
-const plateTools = document.getElementById('plate-tools')
+const rack = document.getElementById('rack')
+const rackToggle = document.getElementById('rack-toggle')
 const sessionList = document.getElementById('session-list')
 const newSession = document.getElementById('new-session')
 
@@ -82,14 +79,6 @@ function entry(kind, origin, time) {
   return { element, body }
 }
 
-const LAMP = {
-  starting: 'Starting harness',
-  ready: 'Ready',
-  working: 'Working',
-  gated: 'Waiting on you',
-  offline: 'Harness stopped',
-}
-
 /** Connection as the host reports it: starting, connected, or stopped. */
 let connection = 'starting'
 
@@ -99,9 +88,17 @@ function setPhase() {
     : connection === 'starting'
       ? 'starting'
       : pendingGates.size > 0 ? 'gated' : working ? 'working' : 'ready'
-  lamp.dataset.state = state
-  lampText.textContent = LAMP[state]
   sendButton.disabled = state !== 'ready'
+}
+
+function addFault(text) {
+  closeAssistant()
+  const built = entry('fault', 'Fault', Date.now())
+  const body = document.createElement('div')
+  body.className = 'text'
+  body.textContent = text
+  built.body.appendChild(body)
+  append(built.element)
 }
 
 function addUserPrompt(text, time) {
@@ -296,32 +293,37 @@ function renderSessions(sessions) {
   sessionList.textContent = ''
   if (sessions.length === 0) {
     const empty = document.createElement('p')
-    empty.className = 'sessions__empty'
+    empty.className = 'rack__empty'
     empty.textContent = 'No stored conversations yet.'
     sessionList.appendChild(empty)
     return
   }
   for (const session of sessions) {
-    const slot = document.createElement('button')
-    slot.type = 'button'
-    slot.className = 'slot'
-    if (session.id === sessionId) slot.classList.add('is-current')
-    if (session.title === undefined) slot.classList.add('is-untitled')
+    const tab = document.createElement('button')
+    tab.type = 'button'
+    tab.className = 'tab'
+    if (session.id === sessionId) tab.classList.add('is-current')
+    if (session.title === undefined) tab.classList.add('is-untitled')
     const title = document.createElement('span')
-    title.className = 'slot__title'
+    title.className = 'tab__title'
     title.textContent = session.title ?? 'Untitled'
     const meta = document.createElement('span')
-    meta.className = 'slot__meta'
-    meta.textContent = `${whenLabel(session.createdAt)} · ${(session.cwd ?? '').split('/').pop()}`
-    slot.append(title, meta)
-    slot.addEventListener('click', () => {
+    meta.className = 'tab__meta'
+    meta.textContent = whenLabel(session.createdAt)
+    const detail = document.createElement('span')
+    detail.className = 'tab__detail'
+    detail.textContent = session.cwd ?? ''
+    tab.title = `${session.title ?? 'Untitled'}\nStarted ${new Date(session.createdAt).toLocaleString()}\n${session.cwd ?? ''}`
+    tab.append(title, meta, detail)
+    tab.addEventListener('click', () => {
       if (session.id === sessionId || working) return
+      collapseRack()
       resetTranscript()
       working = true
       setPhase()
       bridge.send({ type: 'resume', sessionId: session.id })
     })
-    sessionList.appendChild(slot)
+    sessionList.appendChild(tab)
   }
 }
 
@@ -331,8 +333,6 @@ function resetTranscript() {
   closeAssistant()
   toolCalls.clear()
   pendingGates.clear()
-  plateModel.textContent = '—'
-  plateTools.textContent = '—'
 }
 
 /** Paint a resumed conversation from its stored log. */
@@ -374,12 +374,6 @@ function onEvent(event) {
     case 'tool/result':
       addToolResult({ ...event.data, time: event.time })
       return
-    case 'request/header': {
-      const header = event.data.header
-      plateModel.textContent = `${header.config.provider}/${header.config.model}`
-      plateTools.textContent = String(header.tools?.length ?? 0)
-      return
-    }
     default:
   }
 }
@@ -389,9 +383,11 @@ function onEvent(event) {
 function apply(message) {
   switch (message.type) {
     case 'status':
-      if (message.profile !== undefined) plateProfile.textContent = message.profile
       connection = message.state
       if (connection !== 'connected') working = false
+      // Nothing stands watch in the chrome any more, so a dead harness has to
+      // announce itself on the wire.
+      if (connection === 'stopped') addFault('The harness stopped. Restart the app to reconnect.')
       setPhase()
       return
     case 'welcome':
@@ -422,18 +418,11 @@ function apply(message) {
       // A settled turn may have minted a session or earned it a title.
       bridge.send({ type: 'sessions' })
       return
-    case 'error': {
-      closeAssistant()
-      const built = entry('fault', 'Fault', Date.now())
-      const text = document.createElement('div')
-      text.className = 'text'
-      text.textContent = message.message
-      built.body.appendChild(text)
-      append(built.element)
+    case 'error':
+      addFault(message.message)
       working = false
       setPhase()
       return
-    }
     default:
   }
 }
@@ -451,8 +440,27 @@ function submit() {
   bridge.send({ type: 'prompt', text, ...(sessionId === undefined ? {} : { sessionId }) })
 }
 
+/* ---- rack ------------------------------------------------------------ */
+
+function collapseRack() {
+  rack.classList.remove('is-expanded')
+  rackToggle.setAttribute('aria-expanded', 'false')
+  rackToggle.title = 'Show every conversation'
+}
+
+rackToggle.addEventListener('click', () => {
+  const expanded = rack.classList.toggle('is-expanded')
+  rackToggle.setAttribute('aria-expanded', String(expanded))
+  rackToggle.title = expanded ? 'Show the tab strip' : 'Show every conversation'
+})
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') collapseRack()
+})
+
 newSession.addEventListener('click', () => {
   if (working) return
+  collapseRack()
   sessionId = undefined
   resetTranscript()
   bridge.send({ type: 'sessions' })
