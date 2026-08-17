@@ -6,14 +6,21 @@
  * Client → server:
  *   {type:'prompt', text, sessionId?}     new conversation, or follow-up
  *   {type:'permission_reply', id, reply}  reply: 'once' | 'always' | 'reject'
+ *   {type:'sessions'}                     list the persisted conversations
+ *   {type:'resume', sessionId}            reopen a persisted conversation
  *
  * Server → client:
  *   {type:'welcome', v:1}
- *   {type:'session', sessionId}           a prompt opened this conversation
+ *   {type:'session', sessionId}           this conversation is now current
+ *   {type:'sessions', sessions}           the picker's rows, newest first
+ *   {type:'history', sessionId, events}   a resumed conversation's whole log
  *   {type:'event', sessionId, event}      one durable session event, live
  *   {type:'idle', sessionId}              the turn settled
  *   {type:'permission_ask', id, request}  approval needed; reply by id
  *   {type:'error', message}
+ *
+ * A session id the client names is resumed from persistence when this process
+ * has never held it, so the desktop survives a restart with its conversations.
  *
  * One client at a time. While connected, the client is the interactive
  * permission responder (`ctx.permission.respond`); on disconnect pending asks
@@ -44,6 +51,32 @@ interface AgentHandle {
   session: { id: string; events: readonly unknown[] }
 }
 
+interface SessionHeader {
+  id: string
+  createdAt: number
+  cwd?: string
+  origin?: string
+}
+
+/** The `ctx.sessionQuery` reads a picker needs; search is not among them. */
+interface SessionQuery {
+  listSessions(): Promise<{ header: SessionHeader; live: boolean; persisted: boolean }[]>
+  readTitleSnapshots(ids: readonly string[]): Promise<({
+    sessionId: string
+    status: 'fulfilled'
+    value: { title?: { title: string } }
+  } | { sessionId: string; status: 'rejected' })[]>
+}
+
+/** One row of the session picker. */
+interface SessionRow {
+  id: string
+  title?: string
+  cwd?: string
+  createdAt: number
+  live: boolean
+}
+
 /**
  * The socket for one harness home, OUTSIDE that home: the launcher watches
  * `$DSH_HOME` for patch changes, and `fs.watch` on a socket file crashes.
@@ -64,7 +97,7 @@ function defaultSocketPath(ctx: Context): string {
 }
 
 export const name = 'bridge'
-export const inject = ['agents', 'agentDefaultModel', 'sessions', 'permission']
+export const inject = ['agents', 'agentDefaultModel', 'sessions', 'sessionQuery', 'permission']
 
 /**
  * Mount the socket server and drive conversations for one connected client.
@@ -92,39 +125,92 @@ export function apply(ctx: Context, config: Config = {}): void {
     send({ type: 'event', sessionId, event })
   })
 
-  const handlePrompt = async (text: string, requestedSession: string | undefined): Promise<void> => {
-    let sessionId = requestedSession
-    let agent = sessionId === undefined ? undefined : agents.get(sessionId)
-    if (agent === undefined) {
-      await (ctx.get('loader') as { await(): Promise<void> } | undefined)?.await()
-      const registry = ctx.get('agents') as {
-        create(options: unknown): Promise<{ agent: AgentHandle }>
-      }
-      const defaultModel = ctx.get('agentDefaultModel') as {
-        currentSelection(): { provider: string; model: string }
-      }
-      const selection = defaultModel.currentSelection()
-      sessionId = `session-${randomUUID()}`
-      const created = await registry.create({
+  /**
+   * The live agent for a conversation: the one this process already holds, the
+   * persisted session resumed onto a fresh agent, or a brand new conversation.
+   * @param requested - a session id the client named, if any.
+   * @returns the agent and its session id, and whether this call opened it.
+   */
+  const openAgent = async (requested: string | undefined): Promise<{
+    agent: AgentHandle
+    sessionId: string
+    opened: boolean
+  }> => {
+    const held = requested === undefined ? undefined : agents.get(requested)
+    if (held !== undefined) return { agent: held, sessionId: requested as string, opened: false }
+
+    await (ctx.get('loader') as { await(): Promise<void> } | undefined)?.await()
+    const registry = ctx.get('agents') as {
+      create(options: unknown): Promise<{ agent: AgentHandle }>
+      resume(options: unknown): Promise<{ agent: AgentHandle }>
+    }
+    const defaultModel = ctx.get('agentDefaultModel') as {
+      currentSelection(): { provider: string; model: string }
+    }
+    const selection = defaultModel.currentSelection()
+    const setup = (agentCtx: Context): void => {
+      const selected: ModelSelectionRef = { current: selection, assembled: undefined }
+      installModelSelection(agentCtx, selected)
+    }
+    const agentOptions = { provider: selection.provider, model: selection.model }
+
+    // A named session this process never held is on disk, not gone.
+    const sessionId = requested ?? `session-${randomUUID()}`
+    const created = requested === undefined
+      ? await registry.create({
         sessionId: SessionId(sessionId),
         meta: { cwd: process.cwd() },
-        agentOptions: { provider: selection.provider, model: selection.model },
-        setup: (agentCtx: Context) => {
-          const selected: ModelSelectionRef = { current: selection, assembled: undefined }
-          installModelSelection(agentCtx, selected)
-        },
+        agentOptions,
+        setup,
       })
-      agent = created.agent
-      agents.set(sessionId, agent)
-      await agent.whenIdle()
-      send({ type: 'session', sessionId })
-    }
+      : await registry.resume({ resumeSessionId: SessionId(sessionId), agentOptions, setup })
+
+    agents.set(sessionId, created.agent)
+    await created.agent.whenIdle()
+    return { agent: created.agent, sessionId, opened: true }
+  }
+
+  const handlePrompt = async (text: string, requestedSession: string | undefined): Promise<void> => {
+    const { agent, sessionId, opened } = await openAgent(requestedSession)
+    if (opened) send({ type: 'session', sessionId })
     agent.followup(createUserMessage({
       content: [{ type: 'text', text }],
       source: { kind: 'user' },
     }))
     await agent.whenIdle()
-    send({ type: 'idle', sessionId: sessionId as string })
+    send({ type: 'idle', sessionId })
+  }
+
+  const handleResume = async (requestedSession: string): Promise<void> => {
+    const { agent, sessionId } = await openAgent(requestedSession)
+    send({ type: 'session', sessionId })
+    send({ type: 'history', sessionId, events: [...agent.session.events] })
+    send({ type: 'idle', sessionId })
+  }
+
+  /** Persisted root conversations, newest first; subagent children are not rows. */
+  const handleSessions = async (): Promise<void> => {
+    const query = ctx.get('sessionQuery') as SessionQuery
+    const records = await query.listSessions()
+    const rows = records.filter(record => record.persisted && record.header.origin === undefined)
+    const observed = await query.readTitleSnapshots(rows.map(record => record.header.id))
+    const titles = new Map<string, string>()
+    for (const observation of observed) {
+      if (observation.status !== 'fulfilled') continue
+      const title = observation.value.title?.title
+      if (title !== undefined) titles.set(observation.sessionId, title)
+    }
+    const sessions: SessionRow[] = rows
+      .map(record => ({
+        id: record.header.id,
+        ...titles.has(record.header.id) ? { title: titles.get(record.header.id) as string } : {},
+        ...record.header.cwd === undefined ? {} : { cwd: record.header.cwd },
+        createdAt: record.header.createdAt,
+        live: record.live,
+      }))
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, 100)
+    send({ type: 'sessions', sessions })
   }
 
   const handleLine = (line: string): void => {
@@ -144,6 +230,23 @@ export function apply(ctx: Context, config: Config = {}): void {
         }
         const requested = typeof message['sessionId'] === 'string' ? message['sessionId'] : undefined
         void handlePrompt(text, requested).catch((error: unknown) => {
+          send({ type: 'error', message: error instanceof Error ? error.message : String(error) })
+        })
+        return
+      }
+      case 'sessions': {
+        void handleSessions().catch((error: unknown) => {
+          send({ type: 'error', message: error instanceof Error ? error.message : String(error) })
+        })
+        return
+      }
+      case 'resume': {
+        const requested = message['sessionId']
+        if (typeof requested !== 'string' || requested.length === 0) {
+          send({ type: 'error', message: 'resume needs a sessionId' })
+          return
+        }
+        void handleResume(requested).catch((error: unknown) => {
           send({ type: 'error', message: error instanceof Error ? error.message : String(error) })
         })
         return

@@ -80,7 +80,7 @@ app.whenReady().then(() => {
   win = new BrowserWindow({
     width: 940,
     height: 760,
-    minWidth: 560,
+    minWidth: 780,
     title: 'dsh',
     show: false,
     backgroundColor: '#dad6cb',

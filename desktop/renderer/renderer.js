@@ -19,9 +19,13 @@ const lampText = document.getElementById('lamp-text')
 const plateProfile = document.getElementById('plate-profile')
 const plateModel = document.getElementById('plate-model')
 const plateTools = document.getElementById('plate-tools')
+const sessionList = document.getElementById('session-list')
+const newSession = document.getElementById('new-session')
 
 let sessionId
 let working = false
+/** Suppresses entry animation while a resumed log paints in one burst. */
+let replaying = false
 /** Streaming text/reasoning by chunk index, for the open assistant entry. */
 let blocks = new Map()
 let assistant
@@ -39,7 +43,7 @@ function atBottom() {
 
 function append(node) {
   const pinned = atBottom()
-  blank?.remove()
+  blank.hidden = true
   transcript.appendChild(node)
   if (pinned) transcript.scrollTop = transcript.scrollHeight
 }
@@ -58,7 +62,7 @@ function stamp(time) {
  */
 function entry(kind, origin, time) {
   const element = document.createElement('article')
-  element.className = `entry entry--${kind} animate-in`
+  element.className = replaying ? `entry entry--${kind}` : `entry entry--${kind} animate-in`
   const rail = document.createElement('div')
   rail.className = 'rail'
   const node = document.createElement('span')
@@ -100,6 +104,15 @@ function setPhase() {
   sendButton.disabled = state !== 'ready'
 }
 
+function addUserPrompt(text, time) {
+  const built = entry('you', 'You', time)
+  const body = document.createElement('div')
+  body.className = 'text'
+  body.textContent = text
+  built.body.appendChild(body)
+  append(built.element)
+}
+
 /* ---- assistant output ----------------------------------------------- */
 
 function openAssistant(time) {
@@ -126,8 +139,8 @@ function paint() {
   if (pinned) transcript.scrollTop = transcript.scrollHeight
 }
 
-function accumulate(index, kind, text) {
-  openAssistant()
+function accumulate(index, kind, text, time) {
+  openAssistant(time)
   const block = blocks.get(index) ?? { kind, text: '' }
   block.text += text
   blocks.set(index, block)
@@ -265,11 +278,80 @@ function addGate(id, request) {
   setPhase()
 }
 
+/* ---- the picker ------------------------------------------------------ */
+
+/** Today shows the clock; anything older shows the date. */
+function whenLabel(ms) {
+  const at = new Date(ms)
+  const today = new Date()
+  const sameDay = at.toDateString() === today.toDateString()
+  return sameDay ? at.toTimeString().slice(0, 5) : `${at.getMonth() + 1}/${at.getDate()}`
+}
+
+/** The last list the server sent, repainted whenever the current session moves. */
+let sessionRows = []
+
+function renderSessions(sessions) {
+  sessionRows = sessions
+  sessionList.textContent = ''
+  if (sessions.length === 0) {
+    const empty = document.createElement('p')
+    empty.className = 'sessions__empty'
+    empty.textContent = 'No stored conversations yet.'
+    sessionList.appendChild(empty)
+    return
+  }
+  for (const session of sessions) {
+    const slot = document.createElement('button')
+    slot.type = 'button'
+    slot.className = 'slot'
+    if (session.id === sessionId) slot.classList.add('is-current')
+    if (session.title === undefined) slot.classList.add('is-untitled')
+    const title = document.createElement('span')
+    title.className = 'slot__title'
+    title.textContent = session.title ?? 'Untitled'
+    const meta = document.createElement('span')
+    meta.className = 'slot__meta'
+    meta.textContent = `${whenLabel(session.createdAt)} · ${(session.cwd ?? '').split('/').pop()}`
+    slot.append(title, meta)
+    slot.addEventListener('click', () => {
+      if (session.id === sessionId || working) return
+      resetTranscript()
+      working = true
+      setPhase()
+      bridge.send({ type: 'resume', sessionId: session.id })
+    })
+    sessionList.appendChild(slot)
+  }
+}
+
+function resetTranscript() {
+  for (const old of transcript.querySelectorAll('.entry')) old.remove()
+  blank.hidden = false
+  closeAssistant()
+  toolCalls.clear()
+  pendingGates.clear()
+  plateModel.textContent = '—'
+  plateTools.textContent = '—'
+}
+
+/** Paint a resumed conversation from its stored log. */
+function replay(events) {
+  replaying = true
+  for (const event of events) {
+    if (event.type === 'user/message') addUserPrompt(event.data.content?.[0]?.text ?? '', event.time)
+    else onEvent(event)
+  }
+  closeAssistant()
+  replaying = false
+  transcript.scrollTop = transcript.scrollHeight
+}
+
 /* ---- session events -------------------------------------------------- */
 
 function onChunk(chunk, time) {
-  if (chunk.type === 'text-delta') accumulate(chunk.index, 'text', chunk.text)
-  else if (chunk.type === 'reasoning-delta') accumulate(chunk.index, 'reasoning', chunk.text)
+  if (chunk.type === 'text-delta') accumulate(chunk.index, 'text', chunk.text, time)
+  else if (chunk.type === 'reasoning-delta') accumulate(chunk.index, 'reasoning', chunk.text, time)
   else if (chunk.type === 'block-end' && chunk.block?.type === 'text') {
     openAssistant(time)
     blocks.set(chunk.index, { kind: 'text', text: chunk.block.text })
@@ -315,9 +397,17 @@ function apply(message) {
     case 'welcome':
       connection = 'connected'
       setPhase()
+      bridge.send({ type: 'sessions' })
       return
     case 'session':
       sessionId = message.sessionId
+      renderSessions(sessionRows)
+      return
+    case 'sessions':
+      renderSessions(message.sessions)
+      return
+    case 'history':
+      replay(message.events)
       return
     case 'event':
       onEvent(message.event)
@@ -329,6 +419,8 @@ function apply(message) {
       closeAssistant()
       working = false
       setPhase()
+      // A settled turn may have minted a session or earned it a title.
+      bridge.send({ type: 'sessions' })
       return
     case 'error': {
       closeAssistant()
@@ -353,16 +445,19 @@ function submit() {
   if (text.length === 0 || sendButton.disabled) return
   input.value = ''
   input.style.height = 'auto'
-  const built = entry('you', 'You', Date.now())
-  const body = document.createElement('div')
-  body.className = 'text'
-  body.textContent = text
-  built.body.appendChild(body)
-  append(built.element)
+  addUserPrompt(text, Date.now())
   working = true
   setPhase()
   bridge.send({ type: 'prompt', text, ...(sessionId === undefined ? {} : { sessionId }) })
 }
+
+newSession.addEventListener('click', () => {
+  if (working) return
+  sessionId = undefined
+  resetTranscript()
+  bridge.send({ type: 'sessions' })
+  input.focus()
+})
 
 composer.addEventListener('submit', (event) => {
   event.preventDefault()
