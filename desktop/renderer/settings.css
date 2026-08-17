@@ -10,12 +10,14 @@ body.settings-window {
   grid-template-rows: none;
 }
 
+/* The rack stands 38px of tab on top of its bottom rule. This bar has no tabs
+   to set its height, so it states the sum: 38 plus the 1px rule, border-box. */
 .bar {
   -webkit-app-region: drag;
   display: flex;
   align-items: center;
   flex: 0 0 auto;
-  height: 46px;
+  height: 39px;
   padding-left: 84px;
   border-bottom: 1px solid var(--rule-firm);
   background: var(--shade);
