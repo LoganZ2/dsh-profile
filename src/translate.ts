@@ -210,10 +210,30 @@ function usageChunk(usage: PiUsage): StreamChunk {
 }
 
 /** Normalize one thrown error into terminal-finish failure facts. */
+/**
+ * pi-ai reports a route with no resolvable credential as "Provider is not
+ * configured", which names neither what is missing nor where to put it.
+ */
+const UNCONFIGURED = /^Provider is not configured: (.+)$/
+
+/**
+ * Say what a provider message means for this harness. A stream can fail by
+ * throwing or by emitting an error event, and both arrive here so neither can
+ * reach the user in a form that names no remedy.
+ * @param raw - the provider's own message.
+ * @returns the message to show.
+ */
+export function explainFailure(raw: string): string {
+  const unconfigured = UNCONFIGURED.exec(raw)
+  if (unconfigured === null) return raw
+  return `llm-pi: route "${unconfigured[1]}" has no API key. Set one for this route in Settings —`
+    + ' it is kept in the credential file, not in settings — or point apiKeyEnv at the NAME of an'
+    + ' environment variable holding the key.'
+}
+
 export function normalizeFailure(error: unknown, signal?: AbortSignal): LlmFailure {
-  const message = error instanceof Error ? error.message : String(error)
   return {
-    message,
+    message: explainFailure(error instanceof Error ? error.message : String(error)),
     code: signal?.aborted ? 'ABORTED' : 'PROVIDER_ERROR',
   }
 }
@@ -290,7 +310,7 @@ export function eventChunks(event: AssistantMessageEvent): StreamChunk[] {
     }
     case 'error': {
       const failure: LlmFailure = {
-        message: event.error.errorMessage ?? 'provider stream failed',
+        message: explainFailure(event.error.errorMessage ?? 'provider stream failed'),
         code: event.reason === 'aborted' ? 'ABORTED' : 'PROVIDER_ERROR',
       }
       return [
