@@ -603,19 +603,47 @@ body {
 }
 
 /* Quiet: it names a fact about the next send, it is not an action. */
+/* A native select ignores line-height and centres its text by the widget's own
+   metrics, which left it off the baseline its neighbour sits on. Dropping the
+   appearance makes it an ordinary box, so the menu mark is drawn instead. */
+.picker {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
 .composer__model {
+  appearance: none;
   flex: 0 1 auto;
   min-width: 0;
   max-width: 34ch;
-  padding: 2px 4px 2px 0;
+  padding: 2px 15px 2px 0;
   border: none;
+  border-radius: 0;
   background: transparent;
   color: var(--ink-dim);
   font: 11px/1.4 var(--mono);
+  text-overflow: ellipsis;
   cursor: pointer;
 }
 
-.composer__model:hover:not(:disabled) { color: var(--signal); }
+.picker__chevron {
+  position: absolute;
+  right: 3px;
+  width: 5px;
+  height: 5px;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  color: var(--ink-dim);
+  pointer-events: none;
+}
+
+.picker:hover .composer__model:not(:disabled),
+.picker:hover .picker__chevron { color: var(--signal); }
+
 .composer__model:disabled { cursor: default; }
 
 .composer__send {
