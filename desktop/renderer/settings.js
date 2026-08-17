@@ -121,12 +121,12 @@ function mini(label, onClick) {
  * @param into - the element to append to.
  * @returns the field's key and a `read()` for its edited value.
  */
-function renderField(schema, key, ref, value, into, secrets = false) {
+function renderField(schema, key, ref, value, into, secrets = false, base = undefined) {
   if (ref.type === 'dict' || ref.type === 'array') {
     const caption = document.createElement('div')
     caption.className = 'dict__caption'
     caption.textContent = key
-    const widget = ref.type === 'dict' ? dictField(schema, ref, value, secrets) : arrayField(schema, ref, value)
+    const widget = ref.type === 'dict' ? dictField(schema, ref, value, secrets, base) : arrayField(schema, ref, value)
     into.append(caption, widget)
     return { key, read: () => widget.read() }
   }
@@ -284,11 +284,14 @@ function arrayField(schema, arrayRef, value) {
  * @param value - the current entries.
  * @returns an element carrying a `read()` returning the edited dictionary.
  */
-function dictField(schema, dictRef, value, secrets = false) {
+function dictField(schema, dictRef, value, secrets = false, base = undefined) {
   const wrapper = document.createElement('div')
   wrapper.className = 'dict'
   const inner = node(schema, dictRef.inner) ?? {}
   const entries = new Map(Object.entries(value ?? {}))
+  // Entries the profile row supplies. Settings layer OVER that row, so these
+  // cannot be renamed or removed here — a write only shadows them.
+  const inherited = new Set(Object.keys(base ?? {}))
   let readers = new Map()
   let names = new Map()
 
@@ -312,12 +315,22 @@ function dictField(schema, dictRef, value, secrets = false) {
       label.type = 'text'
       label.value = key
       label.spellcheck = false
-      label.title = 'Route id — what a model selection names'
-      head.append(label, mini('Remove', () => {
-        keep()
-        entries.delete(key)
-        paint()
-      }))
+      if (inherited.has(key)) {
+        // Saying so beats letting a rename appear to work and then come back.
+        label.readOnly = true
+        label.title = 'Declared by the profile — rename or remove it in cordis.patch.yml'
+        const note = document.createElement('span')
+        note.className = 'route__origin'
+        note.textContent = 'from profile'
+        head.append(label, note)
+      } else {
+        label.title = 'Route id — what a model selection names'
+        head.append(label, mini('Remove', () => {
+          keep()
+          entries.delete(key)
+          paint()
+        }))
+      }
       card.appendChild(head)
       const read = objectFields(schema, inner, entryValue, card)
       if (secrets) card.appendChild(keyRow(key))
@@ -378,7 +391,7 @@ function renderSection(section) {
   for (const field of fields(section.schema)) {
     // Only the LLM layer's route table carries credentials.
     const secrets = section.ns === 'llm-pi' && field.key === 'providers'
-    controls.push(renderField(section.schema, field.key, field.node, value[field.key], element, secrets))
+    controls.push(renderField(section.schema, field.key, field.node, value[field.key], element, secrets, (section.base ?? {})[field.key]))
   }
 
   const foot = document.createElement('div')

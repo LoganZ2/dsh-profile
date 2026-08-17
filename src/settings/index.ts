@@ -35,12 +35,14 @@ interface SettingsDescriptor {
   ns: string
   schema: unknown
   value: unknown
+  /** The registrant's composition layer — here, the profile row. */
+  base?: unknown
   revision: number
   applies: 'live' | 'restart'
 }
 
 interface SettingsRegistry {
-  describe(): SettingsDescriptor[]
+  describe(options?: { redactSecrets?: boolean }): SettingsDescriptor[]
   replace(ns: string, section: object, expectedRevision?: number): Promise<void>
 }
 
@@ -66,11 +68,16 @@ export function apply(ctx: Context): void {
    */
   const sections = (): Record<string, unknown> => ({
     type: 'settings',
-    sections: settings.describe().map(descriptor => ({
+    // A wire surface must redact: any field a namespace marks secret is
+    // stripped here rather than shipped to a client.
+    sections: settings.describe({ redactSecrets: true }).map(descriptor => ({
       ns: descriptor.ns,
       // Schemastery serializes to a {uid, refs} graph the client can resolve.
       schema: JSON.parse(JSON.stringify(descriptor.schema)) as unknown,
       value: descriptor.value,
+      // The layer beneath the user's. A client needs it to show which entries
+      // come from the profile and therefore cannot be renamed or removed here.
+      base: descriptor.base,
       revision: descriptor.revision,
       applies: descriptor.applies,
     })),
