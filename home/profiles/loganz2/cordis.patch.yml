@@ -67,13 +67,11 @@
       name: '@deepseek-ai/dsh-token-meter'
 
     # --- llm: ours ---------------------------------------------------------
+    # No routes declared here: the profile leaves the table to settings, so a
+    # route can be added, renamed, and removed from the window without a row
+    # underneath it that cannot be deleted there.
     - id: llm-pi
       name: 'dsh-bundle-loganz2'
-      config:
-        providers:
-          openai-codex:
-            transport: websocket
-          deepseek: {}
 
     # Responses over a WebSocket for an endpoint that gates it with an API key.
     # Registers itself as api "openai-responses-ws" on the row above.
