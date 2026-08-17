@@ -22,7 +22,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
 import { PiLlm } from './service.ts'
-import { buildProvider, catalogById, webSocketProtocolIds } from './providers.ts'
+import { buildProvider, catalogById, protocolIds, webSocketProtocolIds } from './providers.ts'
 import type { Config } from './providers.ts'
 
 export { PiLlm } from './service.ts'
@@ -148,6 +148,11 @@ export function apply(ctx: Context, config: Config = {}): void {
       send({ type: 'provider_keys', stored: await llm.storedKeys() })
     }
     bctx.effect(() => bridge.handle('provider_keys', async (_message, send) => report(send)), 'llm-pi: report stored keys')
+    // The api field is an open set, so the client cannot know the legal values
+    // from the schema alone. Publish them rather than making anyone type one.
+    bctx.effect(() => bridge.handle('wire_protocols', (_message, send) => {
+      send({ type: 'wire_protocols', ids: protocolIds(), websocket: webSocketProtocolIds() })
+    }), 'llm-pi: report wire protocols')
     bctx.effect(() => bridge.handle('provider_key_set', async (message, send) => {
       const routeId = message['route']
       if (typeof routeId !== 'string' || routeId.length === 0) {

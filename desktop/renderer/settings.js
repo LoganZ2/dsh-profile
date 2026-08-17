@@ -17,6 +17,9 @@ const statuses = new Map()
 /** Route ids the harness holds a credential for. Whether, never what. */
 let storedKeys = new Set()
 
+/** The wire protocols a route may name, as the LLM layer reports them. */
+let wireProtocols = { ids: [], websocket: [] }
+
 /**
  * Resolve one schemastery ref into its node.
  * @param schema - the serialized {uid, refs} graph.
@@ -49,15 +52,17 @@ function choices(schema, ref) {
  * @param current - its current value.
  * @returns an element carrying a `read()` that returns the edited value.
  */
-function control(schema, ref, current) {
-  const options = choices(schema, ref)
+function control(schema, ref, current, given) {
+  const options = given ?? choices(schema, ref)
   if (options !== undefined) {
     const select = document.createElement('select')
     select.className = 'field__input'
     for (const value of ['', ...options]) {
       const option = document.createElement('option')
       option.value = value
-      option.textContent = value === '' ? '—' : value
+      // Say which wires can use a socket, since that is the reason to pick one.
+      const socket = wireProtocols.websocket.includes(value) ? '  (websocket)' : ''
+      option.textContent = value === '' ? '—' : `${value}${socket}`
       select.appendChild(option)
     }
     select.value = current ?? ''
@@ -122,6 +127,8 @@ function mini(label, onClick) {
  * @returns the field's key and a `read()` for its edited value.
  */
 function renderField(schema, key, ref, value, into, secrets = false, base = undefined) {
+  // The api field is an open set the schema cannot enumerate; the harness does.
+  const given = secrets && key === 'api' && wireProtocols.ids.length > 0 ? wireProtocols.ids : undefined
   if (ref.type === 'dict' || ref.type === 'array') {
     const caption = document.createElement('div')
     caption.className = 'dict__caption'
@@ -135,7 +142,7 @@ function renderField(schema, key, ref, value, into, secrets = false, base = unde
   const label = document.createElement('label')
   label.className = ref.meta?.required === true ? 'field__label is-required' : 'field__label'
   label.textContent = key
-  const input = control(schema, ref, value)
+  const input = control(schema, ref, value, given)
   row.append(label, input)
   into.appendChild(row)
   if (typeof ref.meta?.description === 'string') {
@@ -155,10 +162,10 @@ function renderField(schema, key, ref, value, into, secrets = false, base = unde
  * @param into - the element to append rows to.
  * @returns a `read()` returning the edited object.
  */
-function objectFields(schema, objectRef, value, into) {
+function objectFields(schema, objectRef, value, into, secrets = false) {
   const readers = []
   for (const [key, id] of Object.entries(objectRef?.dict ?? {})) {
-    readers.push(renderField(schema, key, node(schema, id) ?? {}, (value ?? {})[key], into))
+    readers.push(renderField(schema, key, node(schema, id) ?? {}, (value ?? {})[key], into, secrets))
   }
   return () => {
     const out = {}
@@ -332,7 +339,7 @@ function dictField(schema, dictRef, value, secrets = false, base = undefined) {
         }))
       }
       card.appendChild(head)
-      const read = objectFields(schema, inner, entryValue, card)
+      const read = objectFields(schema, inner, entryValue, card, secrets)
       if (secrets) card.appendChild(keyRow(key))
       readers.set(key, () => read())
       names.set(key, label)
@@ -468,6 +475,11 @@ function apply(message) {
     render(lastSections)
     return
   }
+  if (message.type === 'wire_protocols') {
+    wireProtocols = { ids: message.ids ?? [], websocket: message.websocket ?? [] }
+    render(lastSections)
+    return
+  }
   if (message.type === 'provider_keys') {
     // Repaint from what we already hold. Asking the harness again from inside
     // its own answer is how this turned into a message storm.
@@ -480,6 +492,7 @@ function apply(message) {
     return
   }
   if (message.type === 'welcome') {
+    bridge.send({ type: 'wire_protocols' })
     bridge.send({ type: 'provider_keys' })
     bridge.send({ type: 'settings_describe' })
   }
@@ -487,5 +500,6 @@ function apply(message) {
 
 globalThis.dshSettings = { apply }
 bridge.onMessage(apply)
+bridge.send({ type: 'wire_protocols' })
 bridge.send({ type: 'provider_keys' })
 bridge.send({ type: 'settings_describe' })
