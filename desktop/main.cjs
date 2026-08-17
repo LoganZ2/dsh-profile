@@ -96,7 +96,9 @@ ipcMain.on('settings:open', () => {
     height: 620,
     minWidth: 560,
     title: 'Settings',
-    parent: win,
+    // Deliberately NOT a child of the main window: on macOS a `parent` keeps
+    // key-window status, so a click here landed focus for an instant and then
+    // lost it — every input and dropdown was unusable.
     show: false,
     backgroundColor: '#dad6cb',
     titleBarStyle: 'hiddenInset',
