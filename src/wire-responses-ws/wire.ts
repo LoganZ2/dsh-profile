@@ -46,6 +46,32 @@ export function webSocketUrl(baseUrl: string): string {
   return url.toString()
 }
 
+/**
+ * pi-ai reads an error frame's `code` and `message` from the top level and
+ * discards anything else, so a server that nests them — or names them
+ * differently — surfaces as "undefined: undefined". Normalize into the shape
+ * the fold expects, and keep the raw frame as the message of last resort so a
+ * payload is never silently dropped.
+ * @param frame - the parsed frame.
+ * @param raw - its original text.
+ * @returns the frame, with `code`/`message` filled in where it is an error.
+ */
+function normalizeErrorFrame(frame: unknown, raw: string): unknown {
+  if (typeof frame !== 'object' || frame === null) return frame
+  const event = frame as Record<string, unknown>
+  if (event['type'] !== 'error') return frame
+  const nested = typeof event['error'] === 'object' && event['error'] !== null
+    ? event['error'] as Record<string, unknown>
+    : undefined
+  const code = event['code'] ?? nested?.['code'] ?? nested?.['type'] ?? 'error'
+  const message = event['message']
+    ?? nested?.['message']
+    ?? (typeof event['error'] === 'string' ? event['error'] : undefined)
+    ?? event['detail']
+    ?? `the endpoint sent ${raw}`
+  return { ...event, code, message }
+}
+
 /** Node's error event carries the real cause on `error`, and an empty `message`. */
 function socketErrorText(event: { message?: string, error?: { message?: string } }): string | undefined {
   const text = event.error?.message ?? ''
@@ -145,9 +171,9 @@ async function* frames(socket: SocketLike, signal?: AbortSignal): AsyncGenerator
   const onMessage = (event: { data: unknown }): void => {
     const raw = typeof event.data === 'string' ? event.data : String(event.data)
     try {
-      queue.push(JSON.parse(raw))
+      queue.push(normalizeErrorFrame(JSON.parse(raw), raw))
     } catch {
-      failure = new Error('websocket sent a frame that is not JSON')
+      failure = new Error(`websocket sent a frame that is not JSON: ${raw.slice(0, 200)}`)
       done = true
     }
     bump()
