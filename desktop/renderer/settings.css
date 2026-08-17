@@ -112,6 +112,12 @@ body.settings-window {
   accent-color: var(--signal);
 }
 
+/* Every single-line control on the sheet stands at the same height; only a
+   textarea grows, and a checkbox keeps its own box. */
+input.field__input[type="text"],
+input.field__input[type="number"],
+select.field__input { height: var(--control); }
+
 textarea.field__input {
   min-height: 62px;
   resize: vertical;
@@ -186,6 +192,9 @@ textarea.field__input {
 }
 
 .route__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 3px 9px;
   border: 1px solid var(--rule-firm);
   border-radius: 2px;
@@ -205,4 +214,8 @@ textarea.field__input {
   align-items: center;
 }
 
+/* The name box and its Add button are one control: same height, no drift. */
 .dict__add .field__input { flex: 1; }
+
+.dict__add .field__input,
+.dict__add .route__remove { height: var(--control); }

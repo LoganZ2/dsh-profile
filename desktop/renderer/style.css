@@ -21,7 +21,11 @@
   --mono: "SF Mono", "Menlo", ui-monospace, monospace;
 
   --rail: 46px;
+  /* Paired-control heights. Wherever an input sits beside a button, both take
+     the same one of these, so the row reads as a single control: --field for
+     the composer, --control at the settings sheet's smaller scale. */
   --field: 46px;
+  --control: 34px;
   color-scheme: light;
 }
 

@@ -94,6 +94,7 @@ ipcMain.on('settings:open', () => {
   settingsWin = new BrowserWindow({
     width: 620,
     height: 620,
+    minWidth: 560,
     title: 'Settings',
     parent: win,
     show: false,
