@@ -22,6 +22,8 @@ const modeButton = document.getElementById('mode')
 const workspaceButton = document.getElementById('workspace')
 const workspaceName = document.getElementById('workspace-name')
 const sessionList = document.getElementById('session-list')
+const confirmDialog = document.getElementById('confirm')
+const confirmQuestion = document.getElementById('confirm-question')
 const newSession = document.getElementById('new-session')
 
 let sessionId
@@ -338,22 +340,15 @@ function renderSessions(sessions) {
     close.textContent = '\u00d7'
     close.title = 'Delete this conversation'
     close.setAttribute('role', 'button')
-    close.addEventListener('click', (event) => {
+    close.addEventListener('click', async (event) => {
       event.stopPropagation()
-      if (close.classList.contains('is-confirming')) {
-        bridge.send({ type: 'session_delete', sessionId: session.id })
-        if (session.id === sessionId) {
-          sessionId = undefined
-          resetTranscript()
-        }
-        return
+      const label = session.title ?? 'this untitled conversation'
+      if (!await confirmAsk(`Delete “${label}”?`)) return
+      bridge.send({ type: 'session_delete', sessionId: session.id })
+      if (session.id === sessionId) {
+        sessionId = undefined
+        resetTranscript()
       }
-      close.classList.add('is-confirming')
-      close.textContent = 'delete?'
-      setTimeout(() => {
-        close.classList.remove('is-confirming')
-        close.textContent = '\u00d7'
-      }, 2600)
     })
     const detail = document.createElement('span')
     detail.className = 'tab__detail'
@@ -518,6 +513,31 @@ function submit() {
   })
 }
 
+/**
+ * Ask before something irreversible. A native dialog traps focus and handles
+ * Escape, so the only thing left to own is the answer.
+ * @param question - what is about to happen, naming the subject.
+ * @returns whether to go ahead.
+ */
+function confirmAsk(question) {
+  confirmQuestion.textContent = question
+  confirmDialog.showModal()
+  return new Promise((resolve) => {
+    const finish = (answer) => {
+      confirmDialog.close()
+      document.getElementById('confirm-delete').removeEventListener('click', onYes)
+      document.getElementById('confirm-cancel').removeEventListener('click', onNo)
+      confirmDialog.removeEventListener('cancel', onNo)
+      resolve(answer)
+    }
+    const onYes = () => finish(true)
+    const onNo = () => finish(false)
+    document.getElementById('confirm-delete').addEventListener('click', onYes)
+    document.getElementById('confirm-cancel').addEventListener('click', onNo)
+    confirmDialog.addEventListener('cancel', onNo)
+  })
+}
+
 /* ---- mode ------------------------------------------------------------- */
 
 /** 'plan' researches and is denied edits; 'build' acts. */
@@ -632,6 +652,7 @@ rackToggle.addEventListener('click', () => {
 
 document.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape') return
+  if (confirmDialog.open) return
   if (rack.classList.contains('is-expanded')) {
     collapseRack()
     return

@@ -46,6 +46,15 @@
     </form>
   </div>
 
+  <dialog class="ask" id="confirm">
+    <p class="ask__question" id="confirm-question"></p>
+    <p class="ask__detail">Its stored transcript is removed from disk. This cannot be undone.</p>
+    <div class="ask__choices">
+      <button type="button" class="mini" id="confirm-cancel">Cancel</button>
+      <button type="button" class="mini mini--danger" id="confirm-delete">Delete conversation</button>
+    </div>
+  </dialog>
+
   <script src="renderer.js"></script>
 </body>
 </html>

@@ -110,7 +110,7 @@ body {
   max-width: 22ch;
   height: 38px;
   margin-bottom: -1px;
-  padding: 0 13px;
+  padding: 0 7px 0 13px;
   border: 1px solid transparent;
   border-radius: 5px 5px 0 0;
   background: transparent;
@@ -670,7 +670,7 @@ body {
    because a destructive control should not advertise itself. */
 .tab__close {
   flex: 0 0 auto;
-  width: 15px;
+  width: 14px;
   text-align: center;
   border-radius: 2px;
   color: var(--ink-dim);
@@ -682,17 +682,6 @@ body {
 .tab:hover .tab__close,
 .tab.is-current .tab__close { opacity: 0.65; }
 .tab__close:hover { opacity: 1; color: var(--gate); }
-
-/* Once armed it says what the next click does, and stops being a glyph. */
-.tab__close.is-confirming {
-  width: auto;
-  padding: 0 5px;
-  opacity: 1;
-  color: var(--gate);
-  font: 500 9.5px/1.6 var(--display);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
 
 .rack.is-expanded .tab__close { position: absolute; top: 7px; right: 8px; }
 .rack.is-expanded .tab { position: relative; }
@@ -793,3 +782,54 @@ body {
   box-shadow: inset 0 0 0 1px var(--gate);
   color: var(--gate);
 }
+
+/* A small labelled button. Both windows use it, so it lives in the base. */
+.mini {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 9px;
+  border: 1px solid var(--rule-firm);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--ink-dim);
+  font: 500 9.5px/1.3 var(--display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.mini:hover { border-color: var(--signal); color: var(--signal); }
+
+/* ---- asking before something irreversible ----------------------------- */
+
+.ask {
+  max-width: 42ch;
+  padding: 18px 20px 16px;
+  border: 1px solid var(--rule-firm);
+  border-radius: 4px;
+  background: var(--plate);
+  color: var(--ink);
+  font: inherit;
+}
+
+.ask::backdrop { background: rgba(21, 24, 26, 0.34); }
+
+.ask__question { font-size: 15px; }
+
+.ask__detail {
+  margin-top: 6px;
+  color: var(--ink-dim);
+  font-size: 13px;
+}
+
+.ask__choices {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.ask .mini { padding: 5px 11px; }
+.mini--danger { border-color: var(--gate); color: var(--gate); }
+.mini--danger:hover { background: color-mix(in srgb, var(--gate) 12%, transparent); border-color: var(--gate); color: var(--gate); }
