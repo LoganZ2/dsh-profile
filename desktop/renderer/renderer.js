@@ -316,11 +316,34 @@ function renderSessions(sessions) {
     const meta = document.createElement('span')
     meta.className = 'tab__meta'
     meta.textContent = whenLabel(session.createdAt)
+    // Deleting is destructive and unattended, so it asks once, in place.
+    const close = document.createElement('span')
+    close.className = 'tab__close'
+    close.textContent = '\u00d7'
+    close.title = 'Delete this conversation'
+    close.setAttribute('role', 'button')
+    close.addEventListener('click', (event) => {
+      event.stopPropagation()
+      if (close.classList.contains('is-confirming')) {
+        bridge.send({ type: 'session_delete', sessionId: session.id })
+        if (session.id === sessionId) {
+          sessionId = undefined
+          resetTranscript()
+        }
+        return
+      }
+      close.classList.add('is-confirming')
+      close.textContent = 'delete?'
+      setTimeout(() => {
+        close.classList.remove('is-confirming')
+        close.textContent = '\u00d7'
+      }, 2600)
+    })
     const detail = document.createElement('span')
     detail.className = 'tab__detail'
     detail.textContent = session.cwd ?? ''
     tab.title = `${session.title ?? 'Untitled'}\nStarted ${new Date(session.createdAt).toLocaleString()}\n${session.cwd ?? ''}`
-    tab.append(title, meta, detail)
+    tab.append(title, meta, close, detail)
     tab.addEventListener('click', () => {
       if (session.id === sessionId || working) return
       collapseRack()

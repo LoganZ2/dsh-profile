@@ -8,12 +8,14 @@
  *   {type:'permission_reply', id, reply}  reply: 'once' | 'always' | 'reject'
  *   {type:'sessions'}                     list the persisted conversations
  *   {type:'resume', sessionId}            reopen a persisted conversation
+ *   {type:'session_delete', sessionId}    forget one for good, log and all
  *
  * Server → client:
  *   {type:'welcome', v:1}
  *   {type:'session', sessionId}           this conversation is now current
  *   {type:'sessions', sessions}           the picker's rows, newest first
  *   {type:'history', sessionId, events}   a resumed conversation's whole log
+ *   {type:'deleted', sessionId}           that conversation is gone
  *   {type:'event', sessionId, event}      one durable session event, live
  *   {type:'idle', sessionId}              the turn settled
  *   {type:'permission_ask', id, request}  approval needed; reply by id
@@ -29,7 +31,7 @@
 
 import { createHash, randomUUID } from 'node:crypto'
 import { unlinkSync } from 'node:fs'
-import { chmod, mkdir, unlink } from 'node:fs/promises'
+import { chmod, mkdir, readdir, rm, stat, unlink } from 'node:fs/promises'
 import net from 'node:net'
 import { dirname, join, resolve } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
@@ -42,8 +44,10 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import type { PermissionReply, PermissionService } from '../permission/index.ts'
 
 export interface Config {
-  /** Socket path; default `$DSH_HOME/bridge.sock`. */
+  /** Socket path; default one under the OS temp directory, keyed by home. */
   socketPath?: string
+  /** Where session logs live; default `$DSH_HOME/sessions`, as the jsonl row uses. */
+  sessionsRoot?: string
 }
 
 interface AgentHandle {
@@ -139,13 +143,18 @@ export const inject = ['agents', 'agentDefaultModel', 'sessions', 'sessionQuery'
  */
 export function apply(ctx: Context, config: Config = {}): void {
   const socketPath = config.socketPath ?? defaultSocketPath(ctx)
+  const sessionsRoot = (): string => {
+    if (config.sessionsRoot !== undefined) return config.sessionsRoot
+    const homePath = ctx.get('dshHomePath') as ((...segments: string[]) => string) | undefined
+    return homePath === undefined ? join(homedir(), '.dsh', 'sessions') : homePath('sessions')
+  }
   const permission: PermissionService = ctx.permission
   /** Message types claimed by other plugins through `ctx.bridge.handle`. */
   const handlers = new Map<string, BridgeHandler>()
   new BridgeService(ctx, handlers)
 
   /** Live conversations, by session id. */
-  const agents = new Map<string, AgentHandle>()
+  const agents = new Map<string, { agent: AgentHandle, dispose?: () => void }>()
   let client: net.Socket | undefined
   let releaseResponder: (() => void) | undefined
   const pendingAsks = new Map<string, (reply: PermissionReply) => void>()
@@ -173,12 +182,12 @@ export function apply(ctx: Context, config: Config = {}): void {
     opened: boolean
   }> => {
     const held = requested === undefined ? undefined : agents.get(requested)
-    if (held !== undefined) return { agent: held, sessionId: requested as string, opened: false }
+    if (held !== undefined) return { agent: held.agent, sessionId: requested as string, opened: false }
 
     await (ctx.get('loader') as { await(): Promise<void> } | undefined)?.await()
     const registry = ctx.get('agents') as {
-      create(options: unknown): Promise<{ agent: AgentHandle }>
-      resume(options: unknown): Promise<{ agent: AgentHandle }>
+      create(options: unknown): Promise<{ agent: AgentHandle, dispose?: () => void }>
+      resume(options: unknown): Promise<{ agent: AgentHandle, dispose?: () => void }>
     }
     const defaultModel = ctx.get('agentDefaultModel') as {
       currentSelection(): { provider: string; model: string }
@@ -201,9 +210,43 @@ export function apply(ctx: Context, config: Config = {}): void {
       })
       : await registry.resume({ resumeSessionId: SessionId(sessionId), agentOptions, setup })
 
-    agents.set(sessionId, created.agent)
+    agents.set(sessionId, { agent: created.agent, ...created.dispose === undefined ? {} : { dispose: created.dispose } })
     await created.agent.whenIdle()
     return { agent: created.agent, sessionId, opened: true }
+  }
+
+  /**
+   * Forget a conversation for good: tear down a live agent, then remove the
+   * stored log. Only a directory whose own name is the session id, directly
+   * under the persistence root, is ever removed.
+   * @param sessionId - the conversation to delete.
+   */
+  const handleDeleteSession = async (sessionId: string): Promise<void> => {
+    if (!/^session-[A-Za-z0-9._-]+$/.test(sessionId)) {
+      send({ type: 'error', message: `refusing to delete a session with an unexpected id: ${sessionId}` })
+      return
+    }
+    const live = agents.get(sessionId)
+    if (live !== undefined) {
+      live.dispose?.()
+      agents.delete(sessionId)
+    }
+    const root = sessionsRoot()
+    let removed = false
+    for (const project of await readdir(root, { withFileTypes: true }).catch(() => [])) {
+      if (!project.isDirectory()) continue
+      const target = join(root, project.name, sessionId)
+      if (!resolve(target).startsWith(`${resolve(root)}/`)) continue
+      const found = await stat(target).then(entry => entry.isDirectory()).catch(() => false)
+      if (!found) continue
+      await rm(target, { recursive: true, force: true })
+      removed = true
+    }
+    if (!removed && live === undefined) {
+      send({ type: 'error', message: `no stored session ${sessionId} to delete` })
+    }
+    send({ type: 'deleted', sessionId })
+    await handleSessions()
   }
 
   const handlePrompt = async (text: string, requestedSession: string | undefined): Promise<void> => {
@@ -283,6 +326,17 @@ export function apply(ctx: Context, config: Config = {}): void {
           return
         }
         void handleResume(requested).catch((error: unknown) => {
+          send({ type: 'error', message: error instanceof Error ? error.message : String(error) })
+        })
+        return
+      }
+      case 'session_delete': {
+        const requested = message['sessionId']
+        if (typeof requested !== 'string' || requested.length === 0) {
+          send({ type: 'error', message: 'session_delete needs a sessionId' })
+          return
+        }
+        void handleDeleteSession(requested).catch((error: unknown) => {
           send({ type: 'error', message: error instanceof Error ? error.message : String(error) })
         })
         return
