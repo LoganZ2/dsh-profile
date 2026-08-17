@@ -58,20 +58,26 @@ const LLM_PI_NAMESPACE = settingsNamespace('llm-pi')
  */
 const CONFIG_SCHEMA = z.object({
   providers: z.dict(z.object({
-    transport: z.union(['sse', 'websocket', 'websocket-cached', 'auto']),
-    baseURL: z.string(),
-    api: z.union(['openai-completions', 'openai-responses', 'anthropic-messages', 'openai-codex-responses']),
-    apiKeyEnv: z.string(),
-    displayName: z.string(),
+    transport: z.union(['sse', 'websocket', 'websocket-cached', 'auto'])
+      .description('Only the openai-codex-responses wire implements WebSockets; every other api streams over SSE and ignores this.'),
+    baseURL: z.string().description('Hand-declared routes only: the endpoint. A pi-ai catalog route carries its own.'),
+    api: z.union(['openai-completions', 'openai-responses', 'anthropic-messages', 'openai-codex-responses'])
+      .description('Hand-declared routes only: the wire protocol to speak.'),
+    apiKeyEnv: z.string()
+      .description('The NAME of an environment variable holding the key — not the key. To give the key directly, use apiKey below.'),
+    displayName: z.string().description('Label for selectors. The route id above is what a model selection names.'),
     models: z.array(z.object({
       id: z.string().required(),
       name: z.string(),
       contextWindow: z.number(),
       maxTokens: z.number(),
       reasoning: z.boolean(),
-    })),
+    })).description('Hand-declared routes only: the models this endpoint serves.'),
   })),
 })
+
+/** The one wire with a WebSocket implementation behind it. */
+const WEBSOCKET_API = 'openai-codex-responses'
 
 /**
  * Claim `ctx.llm` with the pi-ai-native service.
@@ -115,6 +121,19 @@ export function apply(ctx: Context, config: Config = {}): void {
       const catalog = catalogById()
       for (const [routeId, route] of Object.entries(section.providers ?? {})) {
         buildProvider(routeId, route, catalog)
+        // A transport the wire cannot honor is worse than an error: it looks
+        // set and changes nothing. Catalog routes carry their own api, so this
+        // only judges the ones that declare it.
+        if (
+          route.api !== undefined
+          && route.api !== WEBSOCKET_API
+          && (route.transport === 'websocket' || route.transport === 'websocket-cached')
+        ) {
+          throw new Error(
+            `llm-pi: route "${routeId}" asks for transport "${route.transport}", but api "${route.api}" has`
+            + ` no WebSocket wire — only ${WEBSOCKET_API} does. Use "sse" or "auto", or declare that api.`,
+          )
+        }
       }
     },
   } as never)
