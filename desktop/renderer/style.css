@@ -47,6 +47,10 @@ body {
   margin: 0;
   height: 100vh;
   display: grid;
+  /* Pin the column to the window: an implicit `auto` column sizes to
+     max-content, which would let the tab strip widen the page instead of
+     scrolling inside itself. */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
   background: var(--panel);
   color: var(--ink);
@@ -63,6 +67,7 @@ body {
 .rack {
   -webkit-app-region: drag;
   display: flex;
+  min-width: 0;
   align-items: flex-start;
   padding-left: 84px;
   border-bottom: 1px solid var(--rule-firm);
@@ -90,7 +95,9 @@ body {
   align-items: center;
   gap: 8px;
   flex: 0 1 auto;
-  min-width: 0;
+  /* Shrink to a floor, then let the strip scroll rather than slice tabs into
+     unreadable slivers. */
+  min-width: 108px;
   max-width: 22ch;
   height: 38px;
   margin-bottom: -1px;
@@ -197,14 +204,12 @@ body {
 
 /* ---- rack, expanded -------------------------------------------------- */
 
+/* Still one row — expanding trades width for detail, not height. */
 .rack.is-expanded .rack__strip {
-  flex-wrap: wrap;
-  align-content: flex-start;
   gap: 6px;
   padding: 10px 0 12px;
-  max-height: 46vh;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .rack.is-expanded .tab {
@@ -239,10 +244,9 @@ body {
 }
 
 .rack.is-expanded .rack__new {
-  align-self: flex-start;
+  align-self: stretch;
+  flex: 0 0 auto;
   width: 244px;
-  height: 100%;
-  min-height: 62px;
   margin: 0;
   justify-content: center;
   border: 1px dashed var(--rule-firm);
