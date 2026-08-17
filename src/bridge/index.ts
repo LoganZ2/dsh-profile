@@ -33,6 +33,7 @@ import { chmod, mkdir, unlink } from 'node:fs/promises'
 import net from 'node:net'
 import { dirname, join, resolve } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
+import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
 import type { ModelSelectionRef } from '@deepseek-ai/dsh-agent'
@@ -96,6 +97,38 @@ function defaultSocketPath(ctx: Context): string {
   return bridgeSocketPath(home !== undefined && home.trim().length > 0 ? home : join(homedir(), '.dsh'))
 }
 
+/** Write one message to the connected client. */
+export type BridgeSend = (message: Record<string, unknown>) => void
+
+/** Answer one client message type. Rejections become an `error` to the client. */
+export type BridgeHandler = (message: Record<string, unknown>, send: BridgeSend) => void | Promise<void>
+
+/**
+ * `ctx.bridge` — the router half of the socket. A feature that wants to speak
+ * to the desktop registers its own message types here rather than being sewn
+ * into this plugin, so the transport stays ignorant of what rides on it.
+ */
+export class BridgeService extends Service {
+  constructor(ctx: Context, private readonly handlers: Map<string, BridgeHandler>) {
+    super(ctx, 'bridge')
+  }
+
+  /**
+   * Claim one client message type for as long as the caller's fiber lives.
+   * @param type - the `type` field this handler answers.
+   * @param handler - called with the message and a writer to the client.
+   * @returns a disposer that releases the claim.
+   * @throws if the type is already claimed.
+   */
+  handle(type: string, handler: BridgeHandler): () => void {
+    if (this.handlers.has(type)) throw new Error(`bridge: message type ${type} is already handled`)
+    this.handlers.set(type, handler)
+    return () => {
+      if (this.handlers.get(type) === handler) this.handlers.delete(type)
+    }
+  }
+}
+
 export const name = 'bridge'
 export const inject = ['agents', 'agentDefaultModel', 'sessions', 'sessionQuery', 'permission']
 
@@ -107,6 +140,9 @@ export const inject = ['agents', 'agentDefaultModel', 'sessions', 'sessionQuery'
 export function apply(ctx: Context, config: Config = {}): void {
   const socketPath = config.socketPath ?? defaultSocketPath(ctx)
   const permission: PermissionService = ctx.permission
+  /** Message types claimed by other plugins through `ctx.bridge.handle`. */
+  const handlers = new Map<string, BridgeHandler>()
+  new BridgeService(ctx, handlers)
 
   /** Live conversations, by session id. */
   const agents = new Map<string, AgentHandle>()
@@ -264,8 +300,17 @@ export function apply(ctx: Context, config: Config = {}): void {
         resolver(reply)
         return
       }
-      default:
-        send({ type: 'error', message: `unknown message type ${String(message['type'])}` })
+      default: {
+        const type = String(message['type'])
+        const handler = handlers.get(type)
+        if (handler === undefined) {
+          send({ type: 'error', message: `unknown message type ${type}` })
+          return
+        }
+        void (async () => handler(message, send))().catch((error: unknown) => {
+          send({ type: 'error', message: error instanceof Error ? error.message : String(error) })
+        })
+      }
     }
   }
 

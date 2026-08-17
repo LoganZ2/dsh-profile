@@ -206,6 +206,37 @@ body {
 
 .rack__toggle:hover .rack__chevron { border-color: var(--signal); }
 
+/* A gear would be a picture of a machine; this is the panel's own vocabulary —
+   a slotted screw head, the thing you actually turn to adjust an instrument. */
+.rack__gear {
+  position: relative;
+  width: 13px;
+  height: 13px;
+  border: 1.5px solid var(--ink-dim);
+  border-radius: 50%;
+}
+
+.rack__gear::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 1.5px;
+  right: 1.5px;
+  height: 1.5px;
+  transform: translateY(-50%) rotate(-30deg);
+  background: var(--ink-dim);
+}
+
+.rack__settings:hover .rack__gear,
+.rack__settings:hover .rack__gear::before { border-color: var(--signal); background-color: var(--signal); }
+
+.rack__settings:hover .rack__gear { background-color: transparent; }
+
+.rack__settings:focus-visible .rack__gear,
+.rack__settings:focus-visible .rack__gear::before { border-color: var(--signal); background-color: var(--signal); }
+
+.rack__settings:focus-visible .rack__gear { background-color: transparent; }
+
 /* ---- rack, expanded -------------------------------------------------- */
 
 /* Still one row — expanding trades width for detail, not height. */
@@ -558,6 +589,7 @@ body {
    click. They carry focus in their own marks instead, so keyboard users still
    see where they are. */
 .rack__toggle:focus-visible,
+.rack__settings:focus-visible,
 .rack__new:focus-visible,
 .tab:focus-visible {
   outline: none;

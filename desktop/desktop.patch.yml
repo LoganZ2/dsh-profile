@@ -11,3 +11,8 @@
 - insert:
     - id: bridge
       name: 'dsh-bundle-loganz2/bridge'
+
+    # Serves ctx.settings over the bridge. Desktop-only: it injects `bridge`,
+    # so it belongs with the row that provides one rather than in the profile.
+    - id: settings-bridge
+      name: 'dsh-bundle-loganz2/settings'

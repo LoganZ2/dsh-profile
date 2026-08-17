@@ -14,6 +14,10 @@
       "types": "./lib/bridge/index.d.ts",
       "default": "./lib/bridge/index.js"
     },
+    "./settings": {
+      "types": "./lib/settings/index.d.ts",
+      "default": "./lib/settings/index.js"
+    },
     "./anchored": {
       "types": "./lib/anchored/index.d.ts",
       "default": "./lib/anchored/index.js"

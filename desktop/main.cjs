@@ -26,10 +26,20 @@ const PROFILE = 'loganz2'
 let harness
 let socket
 let win
+let settingsWin
+
+/** Every live window sees the same stream; each decides what it cares about. */
+function windows() {
+  return [win, settingsWin].filter(w => w && !w.isDestroyed())
+}
+
+function relay(line) {
+  for (const target of windows()) target.webContents.send('bridge:message', line)
+}
 
 /** Host-level messages ride the same channel as the bridge's own NDJSON. */
 function post(message) {
-  if (win && !win.isDestroyed()) win.webContents.send('bridge:message', JSON.stringify(message))
+  relay(JSON.stringify(message))
 }
 
 function startHarness() {
@@ -59,7 +69,7 @@ function connect(attempt = 0) {
     while ((index = buffered.indexOf('\n')) !== -1) {
       const line = buffered.slice(0, index)
       buffered = buffered.slice(index + 1)
-      if (line.trim() && win && !win.isDestroyed()) win.webContents.send('bridge:message', line)
+      if (line.trim()) relay(line)
     }
   })
   socket.on('error', () => {
@@ -73,6 +83,31 @@ function connect(attempt = 0) {
 
 ipcMain.on('bridge:send', (_event, line) => {
   if (socket && !socket.destroyed) socket.write(`${line}\n`)
+})
+
+/** Settings live in their own window, opened from the rack and reused after. */
+ipcMain.on('settings:open', () => {
+  if (settingsWin && !settingsWin.isDestroyed()) {
+    settingsWin.focus()
+    return
+  }
+  settingsWin = new BrowserWindow({
+    width: 620,
+    height: 620,
+    title: 'Settings',
+    parent: win,
+    show: false,
+    backgroundColor: '#dad6cb',
+    titleBarStyle: 'hiddenInset',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+  settingsWin.once('ready-to-show', () => settingsWin.show())
+  settingsWin.on('closed', () => { settingsWin = undefined })
+  void settingsWin.loadFile(path.join(__dirname, 'renderer', 'settings.html'))
 })
 
 app.whenReady().then(() => {

@@ -16,6 +16,7 @@ const input = document.getElementById('input')
 const sendButton = document.getElementById('send')
 const rack = document.getElementById('rack')
 const rackToggle = document.getElementById('rack-toggle')
+const settingsButton = document.getElementById('settings')
 const sessionList = document.getElementById('session-list')
 const newSession = document.getElementById('new-session')
 
@@ -30,7 +31,7 @@ let assistant
 const toolCalls = new Map()
 const pendingGates = new Set()
 
-const bridge = globalThis.dsh ?? { send() {} , onMessage() {} }
+const bridge = globalThis.dsh ?? { send() {}, onMessage() {}, openSettings() {} }
 
 /* ---- shell ---------------------------------------------------------- */
 
@@ -447,6 +448,10 @@ function collapseRack() {
   rackToggle.setAttribute('aria-expanded', 'false')
   rackToggle.title = 'Show every conversation'
 }
+
+settingsButton.addEventListener('click', () => {
+  bridge.openSettings?.()
+})
 
 rackToggle.addEventListener('click', () => {
   const expanded = rack.classList.toggle('is-expanded')
