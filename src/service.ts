@@ -84,11 +84,16 @@ export class PiLlm extends Service {
   configure(config: Config): void {
     const catalog = catalogById()
     const routes = new Map<string, RouteConfig>()
-    this.models.clearProviders()
-    for (const [routeId, route] of Object.entries(config.providers ?? {})) {
-      this.models.setProvider(buildProvider(routeId, route, catalog))
+    // Build every provider BEFORE touching the live registry: a bad route in
+    // an edited table must leave the running one alone rather than clear the
+    // catalog and abandon the swap half-done.
+    const built = Object.entries(config.providers ?? {}).map(([routeId, route]) => {
+      const provider = buildProvider(routeId, route, catalog)
       routes.set(routeId, route)
-    }
+      return provider
+    })
+    this.models.clearProviders()
+    for (const provider of built) this.models.setProvider(provider)
     this.routes = routes
     if (routes.size === 0) {
       this.ctx.logger.warn('llm-pi: no providers configured; every request will fail until config.providers names at least one route')

@@ -122,9 +122,12 @@ function openAssistant(time) {
   reason.hidden = true
   const text = document.createElement('div')
   text.className = 'text'
-  built.body.append(reason, text)
+  const waiting = document.createElement('div')
+  waiting.className = 'waiting'
+  waiting.textContent = 'Working'
+  built.body.append(waiting, reason, text)
   append(built.element)
-  assistant = { ...built, reason, text }
+  assistant = { ...built, reason, text, waiting }
   return assistant
 }
 
@@ -134,6 +137,8 @@ function paint() {
   assistant.reason.textContent = ordered.filter(b => b.kind === 'reasoning').map(b => b.text).join('\n').trim()
   assistant.reason.hidden = assistant.reason.textContent.length === 0
   assistant.text.textContent = ordered.filter(b => b.kind === 'text').map(b => b.text).join('')
+  // The placeholder stands only until the model actually says something.
+  assistant.waiting.hidden = assistant.text.textContent.length > 0 || !assistant.reason.hidden
   if (pinned) transcript.scrollTop = transcript.scrollHeight
 }
 
@@ -366,6 +371,13 @@ function onEvent(event) {
       working = true
       setPhase()
       return
+    case 'turn/end': {
+      // A failed turn used to end in silence: the loop records the reason here
+      // and nowhere else the client sees.
+      const reason = event.data?.reason
+      if (reason?.kind === 'error') addFault(reason.error?.message ?? 'The turn failed.')
+      return
+    }
     case 'assistant/chunk':
       onChunk(event.data.chunk, event.time)
       return
@@ -438,6 +450,7 @@ function submit() {
   addUserPrompt(text, Date.now())
   working = true
   setPhase()
+  openAssistant()
   bridge.send({ type: 'prompt', text, ...(sessionId === undefined ? {} : { sessionId }) })
 }
 

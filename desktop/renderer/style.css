@@ -429,6 +429,26 @@ body {
   white-space: pre-wrap;
 }
 
+/* Stands in the answer's place between sending and the first token, so the
+   wire is visibly live rather than apparently idle. */
+.waiting {
+  font-size: 13.5px;
+  color: var(--ink-dim);
+  letter-spacing: 0.02em;
+}
+
+.waiting::after {
+  content: "";
+  animation: ellipsis 1.4s steps(4, end) infinite;
+}
+
+@keyframes ellipsis {
+  0% { content: ""; }
+  25% { content: "."; }
+  50% { content: ".."; }
+  75% { content: "..."; }
+}
+
 .animate-in { animation: rise 0.22s ease-out; }
 
 @keyframes rise {
@@ -610,6 +630,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .animate-in,
+  .waiting::after,
   .entry.is-live .rail::before { animation: none; }
   .rack__chevron { transition: none; }
 }
