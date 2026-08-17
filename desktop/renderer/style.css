@@ -47,6 +47,11 @@
 
 * { box-sizing: border-box; }
 
+/* Generated paragraphs otherwise carry a browser margin that pushes their
+   container around — an empty tab strip grew the header by 26px that way.
+   Anything needing space asks for it. */
+p { margin: 0; }
+
 body {
   margin: 0;
   height: 100vh;
