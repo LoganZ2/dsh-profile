@@ -94,6 +94,57 @@ function control(schema, ref, current) {
 }
 
 /**
+ * The sheet's one action affordance at this scale.
+ * @param label - the button's text.
+ * @param onClick - what it does.
+ * @returns the button.
+ */
+function mini(label, onClick) {
+  const button = document.createElement('button')
+  button.type = 'button'
+  button.className = 'mini'
+  button.textContent = label
+  button.addEventListener('click', onClick)
+  return button
+}
+
+/**
+ * Render one field into a container, dispatching on its schema node: a
+ * dictionary and an array own their layout, everything else is a labelled row.
+ * @param schema - the graph.
+ * @param key - the field name.
+ * @param ref - the field's schema node.
+ * @param value - its current value.
+ * @param into - the element to append to.
+ * @returns the field's key and a `read()` for its edited value.
+ */
+function renderField(schema, key, ref, value, into) {
+  if (ref.type === 'dict' || ref.type === 'array') {
+    const caption = document.createElement('div')
+    caption.className = 'dict__caption'
+    caption.textContent = key
+    const widget = ref.type === 'dict' ? dictField(schema, ref, value) : arrayField(schema, ref, value)
+    into.append(caption, widget)
+    return { key, read: () => widget.read() }
+  }
+  const row = document.createElement('div')
+  row.className = 'field'
+  const label = document.createElement('label')
+  label.className = ref.meta?.required === true ? 'field__label is-required' : 'field__label'
+  label.textContent = key
+  const input = control(schema, ref, value)
+  row.append(label, input)
+  into.appendChild(row)
+  if (typeof ref.meta?.description === 'string') {
+    const note = document.createElement('p')
+    note.className = 'field__note'
+    note.textContent = ref.meta.description
+    into.appendChild(note)
+  }
+  return { key, read: () => input.read() }
+}
+
+/**
  * Lay one object's fields into a container.
  * @param schema - the graph.
  * @param objectRef - an object node with a `dict` of fields.
@@ -102,33 +153,90 @@ function control(schema, ref, current) {
  * @returns a `read()` returning the edited object.
  */
 function objectFields(schema, objectRef, value, into) {
-  const controls = []
+  const readers = []
   for (const [key, id] of Object.entries(objectRef?.dict ?? {})) {
-    const ref = node(schema, id) ?? {}
-    const row = document.createElement('div')
-    row.className = 'field'
-    const label = document.createElement('label')
-    label.className = ref.meta?.required === true ? 'field__label is-required' : 'field__label'
-    label.textContent = key
-    const input = control(schema, ref, (value ?? {})[key])
-    row.append(label, input)
-    into.appendChild(row)
-    if (typeof ref.meta?.description === 'string') {
-      const note = document.createElement('p')
-      note.className = 'field__note'
-      note.textContent = ref.meta.description
-      into.appendChild(note)
-    }
-    controls.push({ key, input })
+    readers.push(renderField(schema, key, node(schema, id) ?? {}, (value ?? {})[key], into))
   }
   return () => {
     const out = {}
-    for (const { key, input } of controls) {
-      const read = input.read()
-      if (read !== undefined) out[key] = read
+    for (const reader of readers) {
+      const read = reader.read()
+      if (read !== undefined) out[reader.key] = read
     }
     return out
   }
+}
+
+/** What to call one item of a list: its own identity if it has one. */
+function itemLabel(item, index) {
+  const named = item !== null && typeof item === 'object' ? item.id ?? item.name : undefined
+  return typeof named === 'string' && named.length > 0 ? named : `#${index + 1}`
+}
+
+/**
+ * An array field as a list of items rather than a blob of JSON. Items shaped
+ * by an object schema become cards of fields; anything else becomes one row of
+ * control plus Remove.
+ * @param schema - the graph.
+ * @param arrayRef - the array node.
+ * @param value - the current items.
+ * @returns an element carrying a `read()` returning the edited array.
+ */
+function arrayField(schema, arrayRef, value) {
+  const wrapper = document.createElement('div')
+  wrapper.className = 'list'
+  const inner = node(schema, arrayRef.inner) ?? {}
+  let items = Array.isArray(value) ? [...value] : []
+  let readers = []
+
+  const collect = () => readers.map(read => read())
+
+  const paint = () => {
+    wrapper.textContent = ''
+    readers = []
+    items.forEach((item, index) => {
+      if (inner.type === 'object') {
+        const card = document.createElement('div')
+        card.className = 'item'
+        const head = document.createElement('div')
+        head.className = 'item__head'
+        const name = document.createElement('span')
+        name.className = 'item__name'
+        name.textContent = itemLabel(item, index)
+        head.append(name, mini('Remove', () => {
+          items = collect()
+          items.splice(index, 1)
+          paint()
+        }))
+        card.appendChild(head)
+        readers.push(objectFields(schema, inner, item, card))
+        wrapper.appendChild(card)
+        return
+      }
+      const row = document.createElement('div')
+      row.className = 'list__row'
+      const input = control(schema, inner, item)
+      row.append(input, mini('Remove', () => {
+        items = collect()
+        items.splice(index, 1)
+        paint()
+      }))
+      readers.push(() => input.read())
+      wrapper.appendChild(row)
+    })
+
+    const add = document.createElement('div')
+    add.className = 'list__add'
+    add.appendChild(mini('Add', () => {
+      items = [...collect(), inner.type === 'object' ? {} : undefined]
+      paint()
+    }))
+    wrapper.appendChild(add)
+  }
+
+  paint()
+  wrapper.read = () => collect().filter(item => item !== undefined)
+  return wrapper
 }
 
 /**
@@ -147,6 +255,10 @@ function dictField(schema, dictRef, value) {
   const entries = new Map(Object.entries(value ?? {}))
   let readers = new Map()
 
+  const keep = () => {
+    for (const [existing, read] of readers) entries.set(existing, read())
+  }
+
   const paint = () => {
     wrapper.textContent = ''
     readers = new Map()
@@ -158,15 +270,11 @@ function dictField(schema, dictRef, value) {
       const label = document.createElement('span')
       label.className = 'route__name'
       label.textContent = key
-      const remove = document.createElement('button')
-      remove.type = 'button'
-      remove.className = 'route__remove'
-      remove.textContent = 'Remove'
-      remove.addEventListener('click', () => {
+      head.append(label, mini('Remove', () => {
+        keep()
         entries.delete(key)
         paint()
-      })
-      head.append(label, remove)
+      }))
       card.appendChild(head)
       readers.set(key, objectFields(schema, inner, entryValue, card))
       wrapper.appendChild(card)
@@ -178,23 +286,17 @@ function dictField(schema, dictRef, value) {
     name.className = 'field__input'
     name.type = 'text'
     name.placeholder = 'route name'
-    const button = document.createElement('button')
-    button.type = 'button'
-    button.className = 'route__remove'
-    button.textContent = 'Add'
     const submit = () => {
       const key = name.value.trim()
       if (key === '' || entries.has(key)) return
-      // Keep what is already typed in the other entries.
-      for (const [existing, read] of readers) entries.set(existing, read())
+      keep()
       entries.set(key, {})
       paint()
     }
-    button.addEventListener('click', submit)
     name.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') { event.preventDefault(); submit() }
     })
-    add.append(name, button)
+    add.append(name, mini('Add', submit))
     wrapper.appendChild(add)
   }
 
@@ -224,35 +326,8 @@ function renderSection(section) {
   element.appendChild(head)
 
   const controls = []
-  const list = fields(section.schema)
-  for (const field of list) {
-    // A dictionary owns its own layout: it is a list of named cards, not one
-    // labelled control on a row.
-    if (field.node.type === 'dict') {
-      const caption = document.createElement('div')
-      caption.className = 'dict__caption'
-      caption.textContent = field.key
-      element.append(caption, dictField(section.schema, field.node, value[field.key]))
-      controls.push({ key: field.key, input: element.lastElementChild })
-      continue
-    }
-    const row = document.createElement('div')
-    row.className = 'field'
-    const label = document.createElement('label')
-    label.className = field.node.meta?.required === true ? 'field__label is-required' : 'field__label'
-    label.textContent = field.key
-    const input = control(section.schema, field.node, value[field.key])
-    label.htmlFor = `${section.ns}-${field.key}`
-    input.id = label.htmlFor
-    row.append(label, input)
-    element.appendChild(row)
-    if (typeof field.node.meta?.description === 'string') {
-      const note = document.createElement('p')
-      note.className = 'field__note'
-      note.textContent = field.node.meta.description
-      element.appendChild(note)
-    }
-    controls.push({ key: field.key, input })
+  for (const field of fields(section.schema)) {
+    controls.push(renderField(section.schema, field.key, field.node, value[field.key], element))
   }
 
   const foot = document.createElement('div')
@@ -269,9 +344,9 @@ function renderSection(section) {
   save.addEventListener('click', () => {
     const patch = {}
     try {
-      for (const { key, input } of controls) {
-        const read = input.read()
-        if (read !== undefined) patch[key] = read
+      for (const reader of controls) {
+        const read = reader.read()
+        if (read !== undefined) patch[reader.key] = read
       }
     } catch (error) {
       statuses.set(section.ns, { text: `Not valid JSON: ${error.message}`, kind: 'is-fault' })
@@ -285,7 +360,7 @@ function renderSection(section) {
     bridge.send({ type: 'settings_update', ns: section.ns, patch, revision: section.revision })
   })
 
-  if (list.length === 0) {
+  if (controls.length === 0) {
     const empty = document.createElement('p')
     empty.className = 'sheet__empty'
     empty.textContent = 'This section has no editable fields.'
