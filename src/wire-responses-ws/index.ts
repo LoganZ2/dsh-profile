@@ -34,7 +34,7 @@ export { openAIResponsesWebSocketApi, PROTOCOL_ID } from './wire.ts'
 
 /** A protocol registry, as `llm-pi` exposes one. */
 interface ProtocolHost {
-  registerProtocol(id: string, factory: () => unknown): () => void
+  registerProtocol(id: string, factory: () => unknown, options?: { websocket?: boolean }): () => void
 }
 
 export const name = 'wire-responses-ws'
@@ -47,7 +47,8 @@ export const inject = ['llm']
 export function apply(ctx: Context): void {
   const llm = ctx.get('llm') as unknown as ProtocolHost
   ctx.effect(
-    () => llm.registerProtocol(PROTOCOL_ID, openAIResponsesWebSocketApi),
+    // This wire is nothing but a socket, so it declares that capability.
+    () => llm.registerProtocol(PROTOCOL_ID, openAIResponsesWebSocketApi, { websocket: true }),
     `wire-responses-ws: register ${PROTOCOL_ID}`,
   )
 }

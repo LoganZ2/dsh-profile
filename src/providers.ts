@@ -60,11 +60,17 @@ export interface Config {
  * a plugin adds its own through {@link registerProtocol}, so a wire lives in
  * its own row rather than in this table.
  */
-const PROTOCOLS = new Map<string, () => ProviderStreams>([
-  ['openai-completions', openAICompletionsApi],
-  ['openai-responses', openAIResponsesApi],
-  ['anthropic-messages', anthropicMessagesApi],
-  ['openai-codex-responses', openAICodexResponsesApi],
+interface ProtocolEntry {
+  factory: () => ProviderStreams
+  /** Whether this wire can stream over a WebSocket at all. */
+  websocket: boolean
+}
+
+const PROTOCOLS = new Map<string, ProtocolEntry>([
+  ['openai-completions', { factory: openAICompletionsApi, websocket: false }],
+  ['openai-responses', { factory: openAIResponsesApi, websocket: false }],
+  ['anthropic-messages', { factory: anthropicMessagesApi, websocket: false }],
+  ['openai-codex-responses', { factory: openAICodexResponsesApi, websocket: true }],
 ])
 
 /**
@@ -74,12 +80,22 @@ const PROTOCOLS = new Map<string, () => ProviderStreams>([
  * @returns a disposer that removes it again.
  * @throws if the id is already taken.
  */
-export function registerProtocol(id: string, factory: () => ProviderStreams): () => void {
+export function registerProtocol(
+  id: string,
+  factory: () => ProviderStreams,
+  options: { websocket?: boolean } = {},
+): () => void {
   if (PROTOCOLS.has(id)) throw new Error(`llm-pi: wire protocol "${id}" is already registered`)
-  PROTOCOLS.set(id, factory)
+  const entry: ProtocolEntry = { factory, websocket: options.websocket ?? false }
+  PROTOCOLS.set(id, entry)
   return () => {
-    if (PROTOCOLS.get(id) === factory) PROTOCOLS.delete(id)
+    if (PROTOCOLS.get(id) === entry) PROTOCOLS.delete(id)
   }
+}
+
+/** The wires that can stream over a socket, whoever registered them. */
+export function webSocketProtocolIds(): string[] {
+  return [...PROTOCOLS.entries()].filter(([, entry]) => entry.websocket).map(([id]) => id)
 }
 
 /** Every protocol a route may name right now. */
@@ -151,8 +167,8 @@ export function buildProvider(
       + ` (one of: ${protocolIds().join(', ')})`,
     )
   }
-  const factory = PROTOCOLS.get(route.api)
-  if (factory === undefined) {
+  const entry = PROTOCOLS.get(route.api)
+  if (entry === undefined) {
     throw new Error(
       `llm-pi: route "${routeId}" names unsupported api "${route.api as string}"`
       + ` — available: ${protocolIds().join(', ')}`,
@@ -167,7 +183,7 @@ export function buildProvider(
     baseUrl: route.baseURL,
     auth: { apiKey: declaredAuth(routeId, route) },
     models: declaredModels(routeId, route),
-    api: factory(),
+    api: entry.factory(),
   })
 }
 

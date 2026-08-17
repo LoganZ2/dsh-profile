@@ -109,8 +109,8 @@ export class PiLlm extends Service {
    * @param factory - builds the provider streams implementation.
    * @returns a disposer that removes the wire and rebuilds again.
    */
-  registerProtocol(id: string, factory: () => never): () => void {
-    const release = registerProtocol(id, factory as never)
+  registerProtocol(id: string, factory: () => never, options: { websocket?: boolean } = {}): () => void {
+    const release = registerProtocol(id, factory as never, options)
     this.rebuild()
     return () => {
       release()

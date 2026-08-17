@@ -22,7 +22,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
 import { PiLlm } from './service.ts'
-import { buildProvider, catalogById } from './providers.ts'
+import { buildProvider, catalogById, webSocketProtocolIds } from './providers.ts'
 import type { Config } from './providers.ts'
 
 export { PiLlm } from './service.ts'
@@ -59,7 +59,7 @@ const LLM_PI_NAMESPACE = settingsNamespace('llm-pi')
 const CONFIG_SCHEMA = z.object({
   providers: z.dict(z.object({
     transport: z.union(['sse', 'websocket', 'websocket-cached', 'auto'])
-      .description('A hint for wires that offer both. Of the wires pi-ai ships only openai-codex-responses does; openai-responses-ws is always a socket and ignores this.'),
+      .description('A hint for wires that offer both, such as openai-codex-responses. A wire that is always a socket (openai-responses-ws) ignores it, and a wire that is always SSE rejects it.'),
     baseURL: z.string().description('Hand-declared routes only: the endpoint. A pi-ai catalog route carries its own.'),
     api: z.string()
       .description('Hand-declared routes only: which wire to speak. pi-ai ships openai-completions, openai-responses, anthropic-messages, and openai-codex-responses; a mounted wire plugin adds more, such as openai-responses-ws for Responses over a WebSocket with an API key. Note openai-codex-responses drives the ChatGPT backend and authenticates only with an OAuth credential from `llm-pi-login openai-codex`.'),
@@ -75,9 +75,6 @@ const CONFIG_SCHEMA = z.object({
     })).description('Hand-declared routes only: the models this endpoint serves.'),
   })),
 })
-
-/** The one wire with a WebSocket implementation behind it. */
-const WEBSOCKET_API = 'openai-codex-responses'
 
 /**
  * Claim `ctx.llm` with the pi-ai-native service.
@@ -124,14 +121,16 @@ export function apply(ctx: Context, config: Config = {}): void {
         // A transport the wire cannot honor is worse than an error: it looks
         // set and changes nothing. Catalog routes carry their own api, so this
         // only judges the ones that declare it.
+        const sockets = webSocketProtocolIds()
         if (
           route.api !== undefined
-          && route.api !== WEBSOCKET_API
+          && !sockets.includes(route.api)
           && (route.transport === 'websocket' || route.transport === 'websocket-cached')
         ) {
           throw new Error(
-            `llm-pi: route "${routeId}" asks for transport "${route.transport}", but api "${route.api}" has`
-            + ` no WebSocket wire — only ${WEBSOCKET_API} does. Use "sse" or "auto", or declare that api.`,
+            `llm-pi: route "${routeId}" asks for transport "${route.transport}", but api "${route.api}" only`
+            + ` streams over SSE. Wires that can use a socket: ${sockets.join(', ')}.`
+            + ' Either drop the transport, or name one of those as the api.',
           )
         }
       }
