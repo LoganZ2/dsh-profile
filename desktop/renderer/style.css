@@ -546,6 +546,25 @@ body {
   outline-offset: 2px;
 }
 
+/* The rack's controls are no-drag islands in a drag region, and Electron reads
+   a click on one as non-pointer focus — which lands the ring above on a plain
+   click. They carry focus in their own marks instead, so keyboard users still
+   see where they are. */
+.rack__toggle:focus-visible,
+.rack__new:focus-visible,
+.tab:focus-visible {
+  outline: none;
+}
+
+.rack__toggle:focus-visible .rack__chevron { border-color: var(--signal); }
+
+.rack__new:focus-visible {
+  border-color: var(--signal);
+  color: var(--signal);
+}
+
+.tab:focus-visible { box-shadow: inset 0 -2px var(--signal); }
+
 @media (prefers-reduced-motion: reduce) {
   .animate-in,
   .entry.is-live .rail::before { animation: none; }
