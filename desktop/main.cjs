@@ -5,7 +5,7 @@
  * neither knows nor cares that Electron exists.
  */
 
-const { app, BrowserWindow, dialog, ipcMain } = require('electron')
+const { app, BrowserWindow, dialog, ipcMain, screen } = require('electron')
 const { spawn } = require('node:child_process')
 const { createHash } = require('node:crypto')
 const net = require('node:net')
@@ -84,6 +84,47 @@ function connect(attempt = 0) {
 ipcMain.on('bridge:send', (_event, line) => {
   if (socket && !socket.destroyed) socket.write(`${line}\n`)
 })
+
+/**
+ * Moving the window from a no-drag island. A drag region would consume the
+ * click, so the tabs cannot be one: the renderer decides whether a press was a
+ * drag or a click, and drives the window itself while it decides it is a drag.
+ */
+/**
+ * Moving the window from a no-drag island. A drag region would consume the
+ * click, so the tabs cannot be one: the renderer decides whether a press is a
+ * drag, and from then on the window simply follows the real cursor. Following
+ * it here rather than reading coordinates in the renderer keeps the window out
+ * of its own feedback loop — client coordinates shift as the window moves.
+ */
+let dragging
+
+function stopDragging() {
+  if (dragging === undefined) return
+  clearInterval(dragging.timer)
+  dragging = undefined
+}
+
+ipcMain.on('window:drag-start', (event) => {
+  const owner = BrowserWindow.fromWebContents(event.sender)
+  if (owner === null || owner.isDestroyed()) return
+  stopDragging()
+  const cursor = screen.getCursorScreenPoint()
+  const [x, y] = owner.getPosition()
+  dragging = {
+    owner,
+    timer: setInterval(() => {
+      if (owner.isDestroyed()) {
+        stopDragging()
+        return
+      }
+      const now = screen.getCursorScreenPoint()
+      owner.setPosition(x + (now.x - cursor.x), y + (now.y - cursor.y))
+    }, 8),
+  }
+})
+
+ipcMain.on('window:drag-end', () => stopDragging())
 
 /** Pick a workspace. The OS picker is the only honest folder chooser here. */
 ipcMain.handle('workspace:pick', async (event) => {

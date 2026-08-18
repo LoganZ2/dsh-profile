@@ -342,6 +342,7 @@ function renderSessions(sessions) {
     close.textContent = '\u00d7'
     close.title = 'Delete this conversation'
     close.setAttribute('role', 'button')
+    close.addEventListener('pointerdown', event => event.stopPropagation())
     close.addEventListener('click', async (event) => {
       event.stopPropagation()
       const label = session.title ?? 'this untitled conversation'
@@ -357,7 +358,9 @@ function renderSessions(sessions) {
     detail.textContent = session.cwd ?? ''
     tab.title = `${session.title ?? 'Untitled'}\nStarted ${new Date(session.createdAt).toLocaleString()}\n${session.cwd ?? ''}`
     tab.append(title, meta, close, detail)
+    draggableByWindow(tab)
     tab.addEventListener('click', () => {
+      if (tab.dataset.dragging === 'true') return
       if (session.id === sessionId || working) return
       sessionId = session.id
       showWorkspace(session.cwd)
@@ -641,6 +644,54 @@ modelSelect.addEventListener('change', () => {
   if (provider === undefined || model === undefined) return
   bridge.send({ type: 'model_select', provider, model, ...(sessionId === undefined ? {} : { sessionId }) })
 })
+
+/* ---- dragging the window by a tab ------------------------------------- */
+
+/** Past this much movement a press is a drag, not a click. */
+const DRAG_THRESHOLD = 4
+
+/**
+ * Tabs sit in the title-bar area, so pressing one should be able to move the
+ * window — but a drag region would eat the click that selects a conversation.
+ * The press is therefore ambiguous until it moves: under the threshold it stays
+ * a click, past it the window follows the pointer and the click is suppressed.
+ * @param element - the tab to make draggable.
+ */
+function draggableByWindow(element) {
+  element.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0 || bridge.dragStart === undefined) return
+    // Client coordinates are only asked whether the press has travelled far
+    // enough to be a drag. Once it has, the host follows the cursor itself —
+    // reading coordinates here after the window starts moving would chase
+    // itself, since they are relative to the window.
+    const originX = event.clientX
+    const originY = event.clientY
+    let dragging = false
+
+    const move = (moveEvent) => {
+      if (dragging) return
+      const travelled = Math.abs(moveEvent.clientX - originX) + Math.abs(moveEvent.clientY - originY)
+      if (travelled < DRAG_THRESHOLD) return
+      dragging = true
+      element.dataset.dragging = 'true'
+      bridge.dragStart()
+    }
+    const up = () => {
+      element.removeEventListener('pointermove', move)
+      element.removeEventListener('pointerup', up)
+      element.removeEventListener('pointercancel', up)
+      if (!dragging) return
+      bridge.dragEnd?.()
+      // Let the click that follows through only if this was not a drag.
+      setTimeout(() => { delete element.dataset.dragging }, 0)
+    }
+
+    element.setPointerCapture(event.pointerId)
+    element.addEventListener('pointermove', move)
+    element.addEventListener('pointerup', up)
+    element.addEventListener('pointercancel', up)
+  })
+}
 
 /* ---- rack ------------------------------------------------------------ */
 
