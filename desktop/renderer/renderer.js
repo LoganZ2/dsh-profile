@@ -453,6 +453,12 @@ function apply(message) {
     case 'models':
       renderModels(message.models ?? [], message.current)
       return
+    case 'settings':
+      // The settings window shares this socket, so its saves land here too.
+      // Routes may have gained or lost models; the catalog is rebuilt live, so
+      // ask for it rather than waiting for a restart.
+      bridge.send({ type: 'models' })
+      return
     case 'mode':
       // The harness is the authority on what actually took effect.
       showMode(message.mode, message.applied)
